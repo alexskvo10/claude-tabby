@@ -1,7 +1,8 @@
 import type { TabPet } from '../../types'
 import { L } from './i18n'
 
-export type Mood = 'happy' | 'work' | 'sad' | 'sleep' | 'proud' | 'focus'
+export type { Mood } from './sprites'
+import type { Mood } from './sprites'
 
 export const FACES: Record<Mood, readonly string[]> = {
   happy: ['(=^･ω･^=)', '(=^･ω･^=)', '(=^･ω･^=)', '(=^-ω-^=)'],

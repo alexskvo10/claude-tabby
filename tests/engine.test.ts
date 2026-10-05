@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import { lines } from './text'
-import { BAND, band, boot, command, GREEN, NOW, PANE, pane, RED, submit, turn, world } from './world'
+import { BAND, band, boot, card, command, GREEN, NOW, PANE, pane, RED, submit, turn, world } from './world'
 
 describe('band', () => {
   test('draws the session row and the work row on both surfaces', async ($, on) => {
@@ -9,7 +9,9 @@ describe('band', () => {
     await boot($, w)
     for (const surface of ['terminal', 'desktop'] as const) {
       const [session, work, intro] = await band($, 140, surface)
-      expect(session).toMatch(/\(=\^･ω･\^=\)\s+ctx ▰+▱+ 48%\s+96k\/200k\s+5ч ▰+▱+ 23%\s+↻ 2ч14м\s+7д ▰+▱+ 41%\s+↻ 3д4ч\s+\$1\.24/)
+      expect(session).toMatch(/ctx [█▏▎▍▌▋▊▉ ]+48% 96k\/200k │ 5ч [█▏▎▍▌▋▊▉ ]+23% ↻ 2ч14м │ 7д [█▏▎▍▌▋▊▉ ]+41% ↻ 3д4ч │ \$1\.24/)
+      // the cat is pixel art where cells draw, a face in text elsewhere
+      if (surface === 'desktop') expect(session).toStartWith('(=^･ω･^=) │ ctx')
       expect(session).toEndWith('≡')
       expect(work).toBe('⎇ feature/band ↑1 ✚2')
       expect(intro).toMatch(/^Tabby: ≡ или \/tab — панель/)
@@ -51,9 +53,12 @@ describe('band', () => {
     await $.tool.call({ tool: 'Read', file_path: '/repo/a.ts' } as never)
     await $.tool.call({ tool: 'Grep', pattern: 'x' } as never)
     await w.clock.advance(12_000)
-    const [session, work] = await band($, 140)
+    const [session, work] = await band($, 140, 'desktop')
     expect(session).toMatch(/^\(=•ω•=\)/)
     expect(work).toMatch(/^[●◉○] 12с · 2 инстр · Grep/)
+    const ui = await $.ui.mount({ surface: 'terminal', ...BAND(140, true) })
+    expect(await ui.find({ type: 'Raster', key: 'cat' })).toBeDefined()
+    await ui.unmount()
   })
 
   test('every block has a card with its details', async ($, on) => {
@@ -119,11 +124,10 @@ describe('forecasts', () => {
     }
     // 32 points in 20 minutes: 96%/h, 45% left, about 28 minutes, before the 2h reset
     const [session] = await band($, 160)
-    expect(session).toMatch(/5ч ▰+▱+ 55%\s+⚠ хватит на 2\dм/)
+    expect(session).toMatch(/5ч [█▏▎▍▌▋▊▉ ]+55% ⚠ хватит на 2\dм/)
     expect(w.toasts.some(t => /При таком темпе лимит 5ч кончится через/.test(t))).toBe(true)
-    const overview = await pane($, w, 'overview')
-    expect(overview).toMatch(/⚠ лимит 5ч кончится раньше сброса/)
-    expect(overview).toMatch(/⚠ кончится через 2\dм/)
+    expect(await pane($, w, 'overview')).toMatch(/⚠ лимит 5ч кончится раньше сброса/)
+    expect(await card($, w, 'overview', 'card-limits')).toMatch(/55%\s+41%\n5ч\s+7д\n↻ 1ч\d+м\s+↻ 3д3ч\n⚠ 2\dм/)
   })
 
   test('warn once as context and limits fill up', async ($, on) => {
@@ -154,9 +158,8 @@ describe('git', () => {
     })
     await boot($, w)
     expect((await band($, 140))[1]).toMatch(/⎇ feature\/band ↑1 ✚2 #12 ✓/)
-    const git = await pane($, w, 'git')
-    expect(git).toMatch(/#12 Add the band/)
-    expect(git).toMatch(/✓ проверки: 2 ✓ · 0 ✗ · 0 ⋯/)
+    const branch = await card($, w, 'git', 'card-branch')
+    expect(branch).toMatch(/ PR #12 \nAdd the band\n✓ проверки: 2 ✓ · 0 ✗ · 0 ⋯/)
     expect(w.toasts.some(t => /Ship it/.test(t))).toBe(true)
   })
 
@@ -203,7 +206,7 @@ describe('tasks', () => {
     expect(await command($, w, 'todo', '!Написать тесты')).toBe('☐ #2 ! Написать тесты')
     expect(await command($, w, 'todo', '* Обновить резюме')).toBe('☐ #3 Обновить резюме ◆')
     // the important one leads in the band
-    expect((await band($, 140))[1]).toMatch(/☐ 0\/3  ! Написать тесты/)
+    expect((await band($, 140))[1]).toMatch(/☐ 0\/3 ! Написать тесты/)
 
     const added = await $.tool.call({ tool: 'mcp__tabby__todo', action: 'add', text: 'README', important: true } as never)
     expect(String(added.result)).toMatch(/Added #4/)
@@ -215,11 +218,10 @@ describe('tasks', () => {
     const ui = await $.ui.mount({ surface: 'terminal', ...PANE(60) })
     await ui.press({ key: 'todo-2' })
     await ui.input({ key: 'todo-new', text: 'Из панели' })
-    let drawn = lines((await ui.drawn()) as never).join('\n')
-    expect(drawn).toMatch(/! ☐ README ✦\n☐ Обновить резюме ◆\n☐ Из панели\n☑ Починить логин\n☑ Написать тесты/)
+    const list = async () => lines((await ui.find({ key: 'card-todo' })) as never).join('\n')
+    expect(await list()).toMatch(/! ☐ README ✦\n☐ Обновить резюме ◆\n☐ Из панели\n☑ Починить логин\n☑ Написать тесты/)
     await ui.press({ key: 'todo-clear' })
-    drawn = lines((await ui.drawn()) as never).join('\n')
-    expect(drawn).not.toMatch(/Починить логин/)
+    expect(await list()).not.toMatch(/Починить логин/)
     await ui.unmount()
 
     expect(w.store.get('todos:*')).toEqual([{ id: 3, text: 'Обновить резюме', done: false, by: 'user', isGlobal: true }])
@@ -239,7 +241,7 @@ describe('tasks', () => {
     await $.turn.start({ text: 'go', turnId: 'p' })
     await $.tool.call({ tool: 'TodoWrite', todos: todos(['completed', 'in_progress', 'pending']) } as never)
     expect((await band($, 160))[1]).toMatch(/▸ план 1\/3 Writeing the fix/)
-    expect(await pane($, w, 'tasks')).toMatch(/ПЛАН CLAUDE  1\/3\n✓ Read the code\n▸ Writeing the fix\n○ Run the tests/)
+    expect(await card($, w, 'tasks', 'card-plan')).toMatch(/ПЛАН CLAUDE  1\/3\n.+\n✓ Read the code\n▸ Writeing the fix\n○ Run the tests/)
     await $.tool.call({ tool: 'TodoWrite', todos: todos(['completed', 'completed', 'completed']) } as never)
     await $.turn.complete({ answer: '', durationMs: 1000, isAborted: false, turnId: 'p', reason: 'answer' } as never)
     expect((await band($, 160))[1]).not.toMatch(/план/)
@@ -274,14 +276,14 @@ describe('tasks', () => {
     expect(await command($, w, 'focus', 'Плашка над вводом 25')).toBe('◎ Фокус: «Плашка над вводом» · 25 мин.')
     await w.clock.advance(10 * 60_000)
     expect((await band($, 140))[1]).toMatch(/◎ Плашка над вводом 15м/)
-    expect(await pane($, w, 'tasks')).toMatch(/осталось 15:00 из 25 мин/)
+    expect(await card($, w, 'tasks', 'card-focus')).toMatch(/осталось 15:00 из 25 мин/)
     await w.clock.advance(15 * 60_000)
     expect(w.toasts.some(t => /25 мин фокуса позади/.test(t))).toBe(true)
     expect(w.sounds).toEqual(['assets/chime.wav'])
     expect((await band($, 140))[1]).toMatch(/перерыв/)
     await w.clock.advance(11 * 60_000)
     expect((await band($, 140))[1]).not.toMatch(/◎/)
-    expect(await pane($, w, 'overview')).toMatch(/0 ходов · фокус 25м/)
+    expect(await card($, w, 'overview', 'card-today')).toMatch(/0 ходов · ◎ 25м/)
   })
 
   test('/focus parses goals, timers and stop', async ($, on) => {
@@ -305,8 +307,8 @@ describe('tests', () => {
 
     await command($, w, 'tab', 'tests')
     const ui = await $.ui.mount({ surface: 'terminal', ...PANE(70) })
-    const drawn = lines((await ui.drawn()) as never).join('\n')
-    expect(drawn).toMatch(/УПАВШИЕ ТЕСТЫ  2\n✗ src\/auth\.test\.ts > login rejects bad password\n✗ src\/auth\.test\.ts > token expires/)
+    const failures = lines((await ui.find({ key: 'card-failures' })) as never).join('\n')
+    expect(failures).toMatch(/УПАВШИЕ ТЕСТЫ  2\n✗ src\/auth\.test\.ts > login rejects bad password\n✗ src\/auth\.test\.ts > token expires/)
     w.prompt.text = 'draft'
     await ui.press({ key: 'fail-1' })
     expect(w.prompt.text).toBe('draft\nПочини упавший тест: src/auth.test.ts > token expires')
@@ -316,7 +318,7 @@ describe('tests', () => {
     await command($, w, 'test')
     expect((await band($, 140))[1]).toMatch(/✓ 42\/42/)
     expect(w.toasts.some(t => /Камбэк/.test(t))).toBe(true)
-    expect(await pane($, w, 'tests')).toMatch(/ИСТОРИЯ\n●●/)
+    expect(await card($, w, 'tests', 'card-tests')).toMatch(/История  ●●/)
   })
 
   test('tests Claude runs through Bash show up too', async ($, on) => {
@@ -373,21 +375,22 @@ describe('pane', () => {
     await turn($, w, 34_000, 3)
     await command($, w, 'tab')
     const ui = await $.ui.mount({ surface: 'terminal', ...PANE(60) })
+    const of = async (key: string) => lines((await ui.find({ key })) as never).join('\n')
     let drawn = lines((await ui.drawn()) as never).join('\n')
     expect(drawn).toMatch(/✓ всё спокойно/)
-    expect(drawn).toMatch(/96k из 200k токенов/)
-    expect(drawn).toMatch(/1 ход · 3 инстр · \$1\.24/)
-    expect(drawn).toMatch(/СЕГОДНЯ\n1 ход\n/)
-    expect(drawn).toMatch(/последний: 34с · 3 инстр · 42k ток/)
+    expect(await of('card-context')).toMatch(/96k/)
+    expect(await of('card-context')).toMatch(/из 200k токенов/)
+    expect(await of('card-session')).toMatch(/1 ход · 3 инстр · \$1\.24/)
+    expect(await of('card-session')).toMatch(/последний: 34с · 3 инстр · 42k ток/)
+    expect(await of('card-today')).toMatch(/СЕГОДНЯ\n1 ход/)
     await ui.press({ key: 'tab-git' })
     drawn = lines((await ui.drawn()) as never).join('\n')
     expect(drawn).toMatch(/alexskvo10\/claude-tab/)
     expect(drawn).toMatch(/ M hooks\/register\.tsx/)
     expect(drawn).toMatch(/d7cb9a4 Initial commit/)
     await ui.press({ key: 'tab-pet' })
-    drawn = lines((await ui.drawn()) as never).join('\n')
-    expect(drawn).toMatch(/Таби · уровень/)
-    expect(drawn).toMatch(/★ Первый шаг/)
+    expect(await of('card-tabby')).toMatch(/УРОВЕНЬ \d/)
+    expect(await of('card-unlocked')).toMatch(/★ Первый шаг/)
     await ui.unmount()
   })
 
@@ -427,8 +430,8 @@ describe('Tabby', () => {
     await boot($, w)
     await turn($, w, 20_000, 1)
     expect(w.toasts.some(t => /Привычка/.test(t))).toBe(true)
-    expect(await pane($, w, 'overview')).toMatch(/СЕГОДНЯ  серия 3 дня/)
-    expect(await pane($, w, 'pet')).toMatch(/серия: 3 дня подряд/)
+    expect(await card($, w, 'overview', 'card-today')).toMatch(/✦ серия 3 дня/)
+    expect(await card($, w, 'pet', 'card-tabby')).toMatch(/✦ серия: 3 дня подряд/)
   })
 })
 
@@ -437,12 +440,54 @@ describe('empty session', () => {
     const w = world(on)
     w.isFresh = true
     await boot($, w)
-    const overview = await pane($, w, 'overview')
-    expect(overview).toMatch(/СЕССИЯ\n1м 00с · 0 ходов · 0 инстр\n/)
-    expect(overview).not.toMatch(/¢/)
-    const [session] = await band($, 140)
-    expect(session).toMatch(/ctx —/)
-    expect(session).not.toMatch(/¢|\$/)
+    const session = await card($, w, 'overview', 'card-session')
+    expect(session).toMatch(/СЕССИЯ\n1м 00с · 0 ходов · 0 инстр$/)
+    expect(await pane($, w, 'overview')).not.toMatch(/¢/)
+    const [row] = await band($, 140)
+    expect(row).toMatch(/ctx —/)
+    expect(row).not.toMatch(/¢|\$/)
+  })
+})
+
+describe('pixels', () => {
+  test('the band cat animates by repainting its cells, and rests once gone', async ($, on) => {
+    const w = world(on)
+    const blits: string[] = []
+    let isMounted = true
+    on('ui.blit', ($, e) => {
+      blits.push(String(e.key))
+      return { value: isMounted ? {} : { deny: 'not mounted' } }
+    })
+    await boot($, w)
+    await $.turn.start({ text: 'go', turnId: 'anim' })
+    const ui = await $.ui.mount({ surface: 'terminal', ...BAND(140, true) })
+    await w.clock.advance(1200)
+    expect(blits.length).toBeGreaterThan(2)
+    expect(new Set(blits)).toEqual(new Set(['cat']))
+    await ui.unmount()
+    isMounted = false
+    await w.clock.advance(500)
+    const after = blits.length
+    await w.clock.advance(3000)
+    expect(blits.length).toBe(after)
+  })
+
+  test('the pane draws the big cat, the focus clock and the rings in cells', async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    await command($, w, 'focus', 'Цель 25')
+    await turn($, w, 5_000, 1)
+    const kinds = async (tab: string, surface: 'terminal' | 'desktop') => {
+      await command($, w, 'tab', tab)
+      const ui = await $.ui.mount({ surface, ...PANE(96) })
+      const keys = (await ui.findAll({ type: 'Raster' })).map(f => f.key)
+      await ui.unmount()
+      return keys
+    }
+    expect(await kinds('pet', 'terminal')).toEqual(['bigcat'])
+    expect(await kinds('tasks', 'terminal')).toEqual(['focus-clock'])
+    expect(await kinds('overview', 'terminal')).toEqual(['ring-context', 'ring-five_hour', 'ring-seven_day', 'heatmap'])
+    for (const tab of ['pet', 'tasks', 'overview']) expect(await kinds(tab, 'desktop'), tab).toEqual([])
   })
 })
 
@@ -461,7 +506,7 @@ describe('settings', () => {
     const w = world(on)
     await boot($, w)
     const [session, work] = await band($, 140)
-    expect(session).toMatch(/ctx ▰+▱+ 48%.*5h ▰+▱+ 23%\s+↻ 2h14m\s+7d/)
+    expect(session).toMatch(/ctx [█▏▎▍▌▋▊▉ ]+48% 96k\/200k │ 5h [█▏▎▍▌▋▊▉ ]+23% ↻ 2h14m │ 7d/)
     expect(work).toBe('⎇ feature/band ↑1 ✚2')
     expect(await pane($, w, 'overview')).toMatch(/1: Overview\s+2: Git ✚2\s+3: Tasks\s+4: Tests\s+5: Tabby[\s\S]*✓ all calm/)
     expect(await command($, w, 'focus', 'ship it 30')).toBe('◎ Focus: "ship it" · 30 min.')
@@ -489,8 +534,9 @@ describe('settings', () => {
     const w = world(on)
     await boot($, w)
     const ui = await $.ui.mount({ surface: 'terminal', ...BAND(140) })
-    const found = await ui.findAll({ type: 'Text', text: '▰▰▰▰▰' })
-    expect(found.some(f => f.props.color === '#2E7D32')).toBe(true)
+    const found = await ui.findAll({ type: 'Text', text: '█' })
+    expect(found.some(f => String(f.props.color).toLowerCase() === '#2e7d32')).toBe(true)
+    expect(found.some(f => String(f.props.backgroundColor).toLowerCase() === '#d9dce3')).toBe(true)
     await ui.unmount()
   })
 })

@@ -200,3 +200,13 @@ export async function pane($: Engine, w: World, tab: string, cols = 60, surface:
   await ui.unmount()
   return drawn
 }
+
+/** The lines of one card of a pane tab, found by its key, whatever the grid does. */
+export async function card($: Engine, w: World, tab: string, key: string, cols = 96): Promise<string> {
+  await command($, w, 'tab', tab)
+  const ui = await $.ui.mount({ surface: 'terminal', ...PANE(cols) })
+  const found = await ui.find({ key })
+  await ui.unmount()
+  if (found === undefined) return ''
+  return lines(found as never).join('\n')
+}

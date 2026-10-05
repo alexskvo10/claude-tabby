@@ -16,11 +16,16 @@ import type { Actions } from './actions'
 import type { Host } from './host'
 import { duration } from './lib/format'
 import { L, setLang, setTheme } from './lib/i18n'
+import { frameAt } from './lib/anim'
 import { NEW_PET } from './lib/pet'
+import type { Mood } from './lib/pet'
+import { toCells } from './lib/pixels'
+import { bigCat, smallCat } from './lib/sprites'
 import { isTestCommand } from './lib/tests'
 import type { Handlers } from './snapshot'
 import * as S from './state'
 import { drawBand } from './ui/band'
+import { forSurface } from './ui/parts'
 import { drawPane } from './ui/pane'
 
 // The mod's state, held by the host so it survives a reload.
@@ -93,6 +98,12 @@ export const register: Register = (on, options) => {
   // reaches the engine through it. A reload builds it again.
   let A: Actions | undefined
   let canImage = false
+  // where a pixel cat is drawn now, and the frame it shows
+  type CatSite = { requestId: string; key: string; size: 'small' | 'big'; mood: Mood; frame: number }
+  let bandCat: CatSite | null = null
+  let paneCat: CatSite | null = null
+  let animTimer: { cancel: () => void } | undefined
+  let startAnim: (() => void) | undefined
   let isWindows = false
   let lastNote = ''
   let lastTickWrite = 0
@@ -235,6 +246,41 @@ export const register: Register = (on, options) => {
         await a.checkFocus(now)
       }),
     )
+    // Tabby's blinks, tail and paws: only the cat's cells are repainted, never
+    // the whole site. The timer runs while a pixel cat is on screen, no longer.
+    startAnim = () => {
+      if (animTimer !== undefined || !opts.animate) return
+      animTimer = $.clock.every(125, () => {
+        if (bandCat === null && paneCat === null) {
+          animTimer?.cancel()
+          animTimer = undefined
+          return
+        }
+        a.detach('anim', async () => {
+          const now = await $.clock.now()
+          for (const site of [bandCat, paneCat]) {
+            if (site === null) continue
+            const frame = frameAt(site.mood, now, site.size)
+            if (frame === site.frame) continue
+            site.frame = frame
+            const c = toCells(site.size === 'small' ? smallCat(site.mood, frame) : bigCat(site.mood, frame))
+            let isGone = false
+            try {
+              const blit = await $.ui.blit({ requestId: site.requestId, key: site.key, cells: c.cells, columns: c.columns, rows: c.rows })
+              isGone = blit.deny !== undefined
+            } catch {
+              isGone = true
+            }
+            // not mounted any more: rest until the next draw puts it back
+            if (isGone) {
+              if (bandCat === site) bandCat = null
+              if (paneCat === site) paneCat = null
+            }
+          }
+        })
+      })
+    }
+    startAnim()
     $.clock.every(45_000, () => a.detach('git', a.refreshGit))
     $.clock.every(30_000, () => a.detach('usage', a.refreshUsage))
 
@@ -458,7 +504,11 @@ export const register: Register = (on, options) => {
       pomodoroMinutes: opts.pomodoroMinutes,
       canImage,
     }
-    return drawBand($.ui.resolve(e), snap, e.props, handlers)
+    const drawn = drawBand(forSurface($.ui.resolve(e), e.surface), snap, e.props, handlers)
+    // the animator repaints the pixel cat between draws
+    bandCat = drawn.hasCat && opts.animate ? { requestId: e.requestId, key: 'cat', size: 'small', mood: drawn.mood, frame: -1 } : null
+    if (bandCat !== null) startAnim?.()
+    return drawn.tree
   })
 
   on('ui.render', { component: 'Pane', requestId: 'tabby' }, async ($, e) => {
@@ -486,6 +536,9 @@ export const register: Register = (on, options) => {
       pomodoroMinutes: opts.pomodoroMinutes,
       canImage,
     }
-    return drawPane($.ui.resolve(e), snap, e.props.bodyColumns, e.surface !== 'mobile', handlers)
+    const drawn = drawPane(forSurface($.ui.resolve(e), e.surface), snap, e.props.bodyColumns, e.surface !== 'mobile', handlers)
+    paneCat = drawn.hasCat && opts.animate ? { requestId: e.requestId, key: 'bigcat', size: 'big', mood: drawn.mood, frame: -1 } : null
+    if (paneCat !== null) startAnim?.()
+    return drawn.tree
   })
 }

@@ -29,6 +29,7 @@ export type Options = {
   sound: boolean
   quiet: boolean
   showCost: boolean
+  animate: boolean
 }
 
 export const DEFAULT_OPTIONS: Options = {
@@ -41,6 +42,7 @@ export const DEFAULT_OPTIONS: Options = {
   sound: true,
   quiet: false,
   showCost: true,
+  animate: true,
 }
 
 /** Reads the options the engine hands `register`, falling back field by field. */
@@ -59,5 +61,6 @@ export function readOptions(raw: Readonly<Record<string, unknown>> | undefined):
     sound: bool(o.sound, true),
     quiet: bool(o.quiet, false),
     showCost: bool(o.showCost, true),
+    animate: bool(o.animate, true),
   }
 }

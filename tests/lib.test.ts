@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
+import { frameAt } from '../hooks/lib/anim'
 import { bar, clock, compact, duration, minutesLeft, plural, sparkline, tokens, truncate, until } from '../hooks/lib/format'
 import { addSample, burn, contextGrowth, turnsLeft } from '../hooks/lib/forecast'
 import { parseLog, parseStatus, repoName } from '../hooks/lib/git'
@@ -7,6 +8,8 @@ import { fit, rowWidth } from '../hooks/lib/layout'
 import type { Seg } from '../hooks/lib/layout'
 import { setLang } from '../hooks/lib/i18n'
 import { level, mood } from '../hooks/lib/pet'
+import { base64, bigText, DEFAULT, pack, ring, sprite, squares, toCells } from '../hooks/lib/pixels'
+import { bigCat, smallCat } from '../hooks/lib/sprites'
 import { addToDay, dayKey, lastDays, streak } from '../hooks/lib/stats'
 import { detectCommand, isTestCommand, parseFailures, parseSummary, tail } from '../hooks/lib/tests'
 
@@ -237,5 +240,78 @@ describe('english', () => {
       setLang('ru')
     }
     expect(duration(185_000)).toBe('3м 05с')
+  })
+})
+
+
+/** Reads packed cells back: [char, fg, bg] per cell. */
+function unpack(cells: string): [string, number, number][] {
+  const B = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  const bytes: number[] = []
+  const clean = cells.replace(/=+$/, '')
+  for (let i = 0; i < clean.length; i += 4) {
+    const n = [0, 1, 2, 3].map(j => B.indexOf(clean[i + j] ?? 'A'))
+    const v = (n[0]! << 18) | (n[1]! << 12) | (n[2]! << 6) | n[3]!
+    bytes.push((v >> 16) & 255, (v >> 8) & 255, v & 255)
+  }
+  const words: number[] = []
+  for (let i = 0; i + 4 <= bytes.length; i += 4) words.push((bytes[i]! | (bytes[i + 1]! << 8) | (bytes[i + 2]! << 16) | (bytes[i + 3]! << 24)) >>> 0)
+  const out: [string, number, number][] = []
+  for (let i = 0; i + 3 <= words.length; i += 3) out.push([String.fromCodePoint(words[i]!), words[i + 1]!, words[i + 2]!])
+  return out
+}
+
+describe('pixels', () => {
+  test('base64 is the standard padded kind', () => {
+    expect(base64(new Uint8Array([]))).toBe('')
+    expect(base64(new Uint8Array([102]))).toBe('Zg==')
+    expect(base64(new Uint8Array([102, 111]))).toBe('Zm8=')
+    expect(base64(new Uint8Array([102, 111, 111, 98, 97, 114]))).toBe('Zm9vYmFy')
+  })
+
+  test('two pixels make one half-block cell', () => {
+    const s = sprite(['ab.', 'b.a'], { a: 0xff0000, b: 0x00ff00 })
+    const c = toCells(s)
+    expect(c.columns).toBe(3)
+    expect(c.rows).toBe(1)
+    expect(unpack(c.cells)).toEqual([
+      ['▀', 0xff0000, 0x00ff00],
+      ['▀', 0x00ff00, DEFAULT],
+      ['▄', 0xff0000, DEFAULT],
+    ])
+    expect(unpack(pack([{ ch: ' ', fg: DEFAULT, bg: DEFAULT }], 1).cells)).toEqual([[' ', DEFAULT, DEFAULT]])
+    expect(unpack(toCells(sprite(['a', 'a'], { a: 7 })).cells)).toEqual([['█', 7, DEFAULT]])
+  })
+
+  test('a ring fills clockwise from the top', () => {
+    const empty = ring(0, 12, [1], 9)
+    const full = ring(100, 12, [1], 9)
+    expect(empty.px.filter(p => p === 1)).toHaveLength(0)
+    expect(full.px.filter(p => p === 9)).toHaveLength(0)
+    const half = ring(50, 12, [1], 9)
+    // the right half is filled, the left is track
+    expect(half.px[6 * 12 + 10]).toBe(1)
+    expect(half.px[6 * 12 + 1]).toBe(9)
+    // the middle is a hole
+    expect(half.px[6 * 12 + 6]).toBeNull()
+  })
+
+  test('digits, squares and the cat have the sizes the drawings count on', () => {
+    expect(toCells(bigText('24:59', 1))).toMatchObject({ columns: 17, rows: 3 })
+    expect(toCells(squares(new Array(28).fill(1), 7, () => 1))).toMatchObject({ columns: 20, rows: 6 })
+    for (const m of ['happy', 'work', 'sad', 'sleep', 'proud', 'focus'] as const) {
+      for (let f = 0; f < 4; f += 1) {
+        expect(toCells(smallCat(m, f)), `${m} ${f}`).toMatchObject({ columns: 10, rows: 2 })
+        expect(toCells(bigCat(m, f)), `${m} ${f}`).toMatchObject({ columns: 20, rows: 8 })
+      }
+    }
+  })
+
+  test('Tabby blinks now and then and types while working', () => {
+    expect(frameAt('happy', 100, 'small')).toBe(3)
+    expect(frameAt('happy', 1000, 'small')).toBe(0)
+    expect(frameAt('happy', 1000, 'big')).toBe(1)
+    expect(new Set([0, 280, 560, 840].map(ms => frameAt('work', ms, 'small'))).size).toBe(4)
+    expect(frameAt('focus', 12345, 'big')).toBe(0)
   })
 })

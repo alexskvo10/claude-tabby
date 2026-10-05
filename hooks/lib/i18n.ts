@@ -107,6 +107,7 @@ const RU = {
     commitLabel: 'commit',
     stash: (n: number) => (n > 0 ? `Stash (${n} в стеке)` : 'Stash'),
     stashConfirm: 'Точно? Нажмите ещё раз',
+    branch: 'Ветка',
     pr: 'Pull request',
     noPr: 'PR для этой ветки нет (или не установлен gh)',
     draft: 'черновик',
@@ -160,6 +161,7 @@ const RU = {
     xp: (a: number, b: number) => `${a}/${b} xp`,
     achievements: 'Достижения',
     grows: 'Как растёт',
+    next: 'Дальше',
     growsLine: (t: number, g: number, d: number, f: number, a: number) =>
       `ход +${t} · зелёные тесты +${g} · задача +${d} · помодоро +${f} · достижение +${a}`,
     totals: (turns: number, tools: number, todos: number) => `всего: ${RU.turns(turns)} · ${tools} инстр · ${RU.tasksN(todos)}`,
@@ -344,6 +346,7 @@ const EN: Strings = {
     commitLabel: 'commit',
     stash: n => (n > 0 ? `Stash (${n} stashed)` : 'Stash'),
     stashConfirm: 'Sure? Press again',
+    branch: 'Branch',
     pr: 'Pull request',
     noPr: 'No PR for this branch (or gh is not installed)',
     draft: 'draft',
@@ -397,6 +400,7 @@ const EN: Strings = {
     xp: (a, b) => `${a}/${b} xp`,
     achievements: 'Achievements',
     grows: 'How Tabby grows',
+    next: 'Next up',
     growsLine: (t, g, d, f, a) => `turn +${t} · green tests +${g} · task +${d} · pomodoro +${f} · achievement +${a}`,
     totals: (turns, tools, todos) => `in all: ${EN.turns(turns)} · ${tools} tools · ${EN.tasksN(todos)}`,
     streak: n => `streak: ${EN.daysN(n)} in a row`,
@@ -498,6 +502,12 @@ const DARK = {
   blue: '#61AFEF',
   purple: '#C678DD',
   cyan: '#56B6C2',
+  /** the empty part of a bar */
+  track: '#2B303B',
+  /** a card's frame in the pane */
+  border: '#3A404C',
+  /** a card's frame that asks for attention */
+  alert: '#7A3B42',
 }
 
 const LIGHT: typeof DARK = {
@@ -508,6 +518,9 @@ const LIGHT: typeof DARK = {
   blue: '#1565C0',
   purple: '#7B1FA2',
   cyan: '#00796B',
+  track: '#D9DCE3',
+  border: '#C3C8D2',
+  alert: '#E8A3A8',
 }
 
 export type Theme = 'dark' | 'light'

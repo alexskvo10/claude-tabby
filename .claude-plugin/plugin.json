@@ -1,6 +1,6 @@
 {
   "name": "tabby",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A calm dashboard above the prompt: context and rate limits with forecasts, git and PR checks, tests, focus, a mini TODO and Tabby the cat",
   "types": "./types/index.d.ts",
   "author": {
@@ -8,21 +8,35 @@
   },
   "repository": "https://github.com/alexskvo10/claude-tab",
   "license": "MIT",
-  "keywords": ["dashboard", "status", "rate-limits", "context", "pomodoro", "todo", "git"],
+  "keywords": [
+    "dashboard",
+    "status",
+    "rate-limits",
+    "context",
+    "pomodoro",
+    "todo",
+    "git"
+  ],
   "userConfig": {
     "language": {
       "type": "string",
       "title": "Language / Язык",
       "description": "Interface language: ru or en",
       "default": "ru",
-      "options": ["ru", "en"]
+      "options": [
+        "ru",
+        "en"
+      ]
     },
     "theme": {
       "type": "string",
       "title": "Palette",
       "description": "Colours for a dark or a light terminal",
       "default": "dark",
-      "options": ["dark", "light"]
+      "options": [
+        "dark",
+        "light"
+      ]
     },
     "pomodoroMinutes": {
       "type": "number",
@@ -64,6 +78,12 @@
       "type": "boolean",
       "title": "Show cost",
       "description": "Show the session cost in the band and the pane",
+      "default": true
+    },
+    "animate": {
+      "type": "boolean",
+      "title": "Animate Tabby",
+      "description": "Blink, wag and type in pixel art (terminal)",
       "default": true
     }
   }

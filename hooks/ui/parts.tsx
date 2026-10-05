@@ -3,7 +3,6 @@ import type { ElementTable, RenderElement } from 'claude-code'
 
 import type { TabFocus, TabGit, TabLimitSample, TabLive, TabPlanItem, TabTests, TabTodo, TabTurn, TabUsage } from '../../types'
 import {
-  bar,
   C,
   compact,
   duration,
@@ -21,9 +20,21 @@ import { burn, contextGrowth, turnsLeft } from '../lib/forecast'
 import { L } from '../lib/i18n'
 import type { Part, Seg } from '../lib/layout'
 import { SEPARATOR } from '../lib/layout'
+import { along, css, rgb } from '../lib/pixels'
 import type { Handlers } from '../snapshot'
 
 export type El = ElementTable
+
+/**
+ * The table a drawing may use on `surface`: cells (Raster) and pictures
+ * (Image) only where the terminal draws them. Other surfaces list those keys
+ * as stand-ins that draw nothing, so the drawings ask this, not the table.
+ */
+export function forSurface(el: El, surface: string): El {
+  if (surface === 'terminal') return el
+  const { Raster: _raster, Image: _image, ...rest } = el as Record<string, unknown>
+  return rest as El
+}
 
 /** Runs of text in a row; a run with `press` is a plain button. */
 export function Runs(el: El, parts: readonly Part[], key: string): RenderElement[] {
@@ -39,7 +50,7 @@ export function Runs(el: El, parts: readonly Part[], key: string): RenderElement
         onPress={() => p.press?.()}
       />
     ) : (
-      <Text color={p.color} dimColor={p.dim} bold={p.bold} wrap="truncate-end">
+      <Text color={p.color} dimColor={p.dim} bold={p.bold} backgroundColor={p.bg} wrap="truncate-end">
         {p.text}
       </Text>
     ),
@@ -52,7 +63,7 @@ export function Line(el: El, parts: readonly Part[], key?: string): RenderElemen
   return (
     <Text key={key} wrap="truncate-end">
       {parts.map(p => (
-        <Text color={p.color} dimColor={p.dim} bold={p.bold}>
+        <Text color={p.color} dimColor={p.dim} bold={p.bold} backgroundColor={p.bg}>
           {p.text}
         </Text>
       ))}
@@ -60,14 +71,41 @@ export function Line(el: El, parts: readonly Part[], key?: string): RenderElemen
   )
 }
 
-/** A bar coloured by how full it is, or in one colour for progress. */
+const EIGHTHS = ['', '▏', '▎', '▍', '▌', '▋', '▊', '▉']
+
+/**
+ * A smooth bar: whole cells, then an eighth-cell edge, over a track. Filled
+ * cells run along green → yellow → red by where they sit (so a full bar
+ * reddens at its end), or in one `color` for progress.
+ */
 export function barParts(pct: number, width: number, color?: string): Part[] {
-  const b = bar(pct, width)
-  return [
-    { text: b.fill, color: color ?? heat(pct) },
-    { text: b.rest, dim: true },
-  ]
+  const w = Math.max(1, Math.floor(width))
+  const eighths = Math.round((Math.min(100, Math.max(0, pct)) / 100) * w * 8)
+  const shown = pct > 0 && eighths === 0 ? 1 : eighths
+  const full = Math.floor(shown / 8)
+  const edge = shown % 8
+  const stops = [rgb(C.green), rgb(C.yellow), rgb(C.red)]
+  const tint = (i: number) => color ?? css(along(stops, w <= 1 ? 0 : i / (w - 1)))
+  const out: Part[] = []
+  for (let i = 0; i < full; i += 1) out.push({ text: '█', color: tint(i), bg: C.track })
+  if (edge > 0 && full < w) out.push({ text: EIGHTHS[edge]!, color: tint(full), bg: C.track })
+  const rest = w - full - (edge > 0 ? 1 : 0)
+  if (rest > 0) out.push({ text: ' '.repeat(rest), bg: C.track })
+  return merge(out)
 }
+
+/** Joins neighbouring runs of one style, so a bar is a few elements, not one per cell. */
+export function merge(parts: readonly Part[]): Part[] {
+  const out: Part[] = []
+  for (const p of parts) {
+    const last = out.at(-1)
+    if (last !== undefined && last.press === undefined && p.press === undefined && last.color === p.color && last.bg === p.bg && last.dim === p.dim && last.bold === p.bold) {
+      out[out.length - 1] = { ...last, text: last.text + p.text }
+    } else out.push({ ...p })
+  }
+  return out
+}
+
 
 const sep: Part = { text: SEPARATOR }
 
@@ -86,7 +124,7 @@ export function joinSegs(segs: readonly Seg[]): Part[] {
 export function ctxSeg(u: TabUsage | null, history: readonly TabTurn[], barWidth: number, on: Handlers): Seg {
   const label: Part = { text: 'ctx', dim: true, press: () => on.open('overview'), hoverColor: C.accent }
   if (u === null || u.percent === undefined) {
-    return { id: 'ctx', rank: 10, parts: [label, { text: ' —', dim: true }], card: [{ text: L.card.contextFresh, dim: true }] }
+    return { id: 'ctx', group: 'ctx', rank: 10, parts: [label, { text: ' —', dim: true }], card: [{ text: L.card.contextFresh, dim: true }] }
   }
   const pct = u.percent
   const growth = contextGrowth(history)
@@ -95,6 +133,7 @@ export function ctxSeg(u: TabUsage | null, history: readonly TabTurn[], barWidth
   if (growth !== undefined && left !== undefined) card.push({ text: L.card.contextGrowth(tokens(growth), left), dim: true })
   return {
     id: 'ctx',
+    group: 'ctx',
     rank: 10,
     parts: [
       label,
@@ -111,17 +150,17 @@ export function ctxLeftSeg(u: TabUsage | null, history: readonly TabTurn[]): Seg
   if (u === null || u.percent === undefined || u.percent < 40) return null
   const left = turnsLeft(u.tokens, u.window, contextGrowth(history))
   if (left === undefined || left > 30) return null
-  return { id: 'ctxLeft', rank: 6, parts: [{ text: L.band.turnsLeft(left), color: left <= 5 ? C.red : C.yellow }] }
+  return { id: 'ctxLeft', group: 'ctx', rank: 6, parts: [{ text: L.band.turnsLeft(left), color: left <= 5 ? C.red : C.yellow }] }
 }
 
 export function ctxTokensSeg(u: TabUsage | null): Seg | null {
   if (u === null || u.tokens === undefined) return null
-  return { id: 'ctxTokens', rank: 2, parts: [{ text: `${tokens(u.tokens)}/${tokens(u.window)}`, dim: true }] }
+  return { id: 'ctxTokens', group: 'ctx', rank: 2, parts: [{ text: `${tokens(u.tokens)}/${tokens(u.window)}`, dim: true }] }
 }
 
 export function compactHintSeg(u: TabUsage | null): Seg | null {
   if (u === null || (u.percent ?? 0) < 85) return null
-  return { id: 'compact', rank: 9, parts: [{ text: '⚠ /compact', color: C.red, bold: true }] }
+  return { id: 'compact', group: 'ctx', rank: 9, parts: [{ text: '⚠ /compact', color: C.red, bold: true }] }
 }
 
 /** One segment per rate-limit window, with its reset and, when it will run out first, a warning. */
@@ -153,6 +192,7 @@ export function limitSegs(
     }
     segs.push({
       id: `limit:${l.kind}`,
+      group: `limit:${l.kind}`,
       rank: isPrimary ? 8 : 7 - i * 0.1,
       parts: [
         { text: label, dim: true, press: () => on.open('overview'), hoverColor: C.accent },
@@ -165,13 +205,14 @@ export function limitSegs(
     if (b?.runsOutInMs !== undefined) {
       segs.push({
         id: `pace:${l.kind}`,
+        group: `limit:${l.kind}`,
         rank: isPrimary ? 8.5 : 7.5,
         parts: [{ text: `⚠ ${L.band.runsOut(compact(b.runsOutInMs))}`, color: C.red }],
         card,
       })
     } else if (left !== undefined) {
       // a space after the arrow: Windows Terminal's font draws it wider than a cell
-      segs.push({ id: `reset:${l.kind}`, rank: isPrimary ? 4 : 1, parts: [{ text: `↻ ${compact(left)}`, dim: true }], card })
+      segs.push({ id: `reset:${l.kind}`, group: `limit:${l.kind}`, rank: isPrimary ? 4 : 1, parts: [{ text: `↻ ${compact(left)}`, dim: true }], card })
     }
   })
   return segs
@@ -183,6 +224,7 @@ export function costSeg(u: TabUsage | null, history: readonly TabTurn[], on: Han
   const avg = costs.length > 0 ? costs.reduce((s, c) => s + c, 0) / costs.length : undefined
   return {
     id: 'cost',
+    group: 'cost',
     rank: 0,
     parts: [{ text: money(u.costUsd), dim: true, press: () => on.open('overview'), hoverColor: C.accent }],
     card: [{ text: L.card.cost(money(u.costUsd), avg !== undefined ? money(avg) : '—') }],
@@ -208,7 +250,7 @@ export function gitSeg(g: TabGit | null, on: Handlers): Seg | null {
   }
   const card: Part[] = [{ text: L.card.git(dirty) }]
   if (g.pr !== null) card.push({ text: ` · PR #${g.pr.number} ${truncate(g.pr.title, 40)}`, dim: true })
-  return { id: 'git', rank: 9, parts: parts.filter(p => p.text !== ''), card }
+  return { id: 'git', group: 'git', rank: 9, parts: parts.filter(p => p.text !== ''), card }
 }
 
 export function testsSeg(t: TabTests, now: number, on: Handlers): Seg | null {
@@ -217,6 +259,7 @@ export function testsSeg(t: TabTests, now: number, on: Handlers): Seg | null {
     const spin = ['◐', '◓', '◑', '◒'][Math.floor(now / 1000) % 4]!
     return {
       id: 'tests',
+      group: 'tests',
       rank: 8,
       parts: [
         { text: `${spin} `, color: C.yellow },
@@ -228,6 +271,7 @@ export function testsSeg(t: TabTests, now: number, on: Handlers): Seg | null {
     const count = t.total !== undefined && t.total > 0 ? `${t.passed ?? t.total}/${t.total}` : 'ok'
     return {
       id: 'tests',
+      group: 'tests',
       rank: 8,
       parts: [{ text: '✓ ', color: C.green }, { text: count, press: () => on.runTests(), hoverColor: C.green }],
       card: [{ text: L.card.testsPass }],
@@ -236,6 +280,7 @@ export function testsSeg(t: TabTests, now: number, on: Handlers): Seg | null {
   const failed = t.failed !== undefined && t.failed > 0 ? L.band.failed(t.failed) : L.band.failedAny
   return {
     id: 'tests',
+    group: 'tests',
     rank: 8,
     parts: [{ text: '✗ ', color: C.red }, { text: failed, press: () => on.askToFix(), hoverColor: C.red }],
     card: [{ text: L.card.tests }, ...(t.failures.length > 0 ? [{ text: `: ${truncate(t.failures.join(', '), 80)}`, dim: true }] : [])],
@@ -251,7 +296,7 @@ export function planSeg(plan: readonly TabPlanItem[], width: number, on: Handler
     { text: `${L.band.plan} ${done}/${plan.length}`, color: C.cyan, press: () => on.open('tasks'), hoverColor: C.cyan },
   ]
   if (active !== undefined) parts.push({ text: ` ${truncate(active.active || active.text, Math.max(8, width))}`, dim: true })
-  return { id: 'plan', rank: 7.5, parts, card: [{ text: L.card.plan(done, plan.length) }] }
+  return { id: 'plan', group: 'plan', rank: 7.5, parts, card: [{ text: L.card.plan(done, plan.length) }] }
 }
 
 export function todoSegs(list: readonly TabTodo[], width: number, on: Handlers): Seg[] {
@@ -262,6 +307,7 @@ export function todoSegs(list: readonly TabTodo[], width: number, on: Handlers):
   const segs: Seg[] = [
     {
       id: 'todo',
+      group: 'todo',
       rank: 6,
       parts: [
         { text: next === undefined ? '☑ ' : '☐ ', color: C.blue },
@@ -273,6 +319,7 @@ export function todoSegs(list: readonly TabTodo[], width: number, on: Handlers):
   if (next !== undefined && width > 0) {
     segs.push({
       id: 'todoNext',
+      group: 'todo',
       rank: 2,
       parts: [
         ...(next.isHigh === true ? [{ text: '! ', color: C.red, bold: true }] : []),
@@ -295,7 +342,7 @@ export function focusSeg(f: TabFocus | null, now: number, goalWidth: number, on:
   if (f.minutes > 0 && f.isNotified) parts.push({ text: ` · ${L.band.breakTime}`, color: C.green })
   else if (f.minutes > 0) parts.push({ text: ` ${left}`, color: C.accent })
   else parts.push({ text: ` ${compact(elapsed)}`, dim: true })
-  return { id: 'focus', rank: 7, parts, card: [{ text: L.card.focus(f.minutes > 0 ? left : compact(elapsed)) }] }
+  return { id: 'focus', group: 'focus', rank: 7, parts, card: [{ text: L.card.focus(f.minutes > 0 ? left : compact(elapsed)) }] }
 }
 
 export function liveSeg(l: TabLive | null, now: number): Seg | null {
@@ -308,7 +355,7 @@ export function liveSeg(l: TabLive | null, now: number): Seg | null {
   if (l.tools > 0) parts.push({ text: ` · ${l.tools} ${L.band.tools}`, dim: true })
   if (l.lastTool !== '') parts.push({ text: ` · ${truncate(l.lastTool, 14)}`, dim: true })
   if (l.errors > 0) parts.push({ text: ` · ${l.errors} ${L.band.errors}`, color: C.red })
-  return { id: 'live', rank: 10, parts }
+  return { id: 'live', group: 'turn', rank: 10, parts }
 }
 
 export function lastTurnSeg(last: TabTurn | undefined, count: number, on: Handlers): Seg | null {
@@ -318,5 +365,5 @@ export function lastTurnSeg(last: TabTurn | undefined, count: number, on: Handle
   ]
   if (last.tools > 0) parts.push({ text: ` · ${last.tools} ${L.band.tools}`, dim: true })
   if (last.errors > 0) parts.push({ text: ` · ${last.errors} ${L.band.errors}`, color: C.red, dim: true })
-  return { id: 'turn', rank: 3, parts }
+  return { id: 'turn', group: 'turn', rank: 3, parts }
 }
