@@ -1,0 +1,9 @@
+{
+  "name": "tabby",
+  "version": "0.1.0",
+  "description": "A calm dashboard above the prompt: context and rate limits, git, tests, focus, a mini TODO and Tabby the cat",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "alexskvo10"
+  }
+}
