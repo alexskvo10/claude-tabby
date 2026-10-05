@@ -432,6 +432,20 @@ describe('Tabby', () => {
   })
 })
 
+describe('empty session', () => {
+  test('a session with no cost yet shows no 0¢', async ($, on) => {
+    const w = world(on)
+    w.isFresh = true
+    await boot($, w)
+    const overview = await pane($, w, 'overview')
+    expect(overview).toMatch(/СЕССИЯ\n1м 00с · 0 ходов · 0 инстр\n/)
+    expect(overview).not.toMatch(/¢/)
+    const [session] = await band($, 140)
+    expect(session).toMatch(/ctx —/)
+    expect(session).not.toMatch(/¢|\$/)
+  })
+})
+
 describe('windows', () => {
   test('tests run through cmd.exe there', async ($, on) => {
     const w = world(on, { env: { OS: 'Windows_NT' } })

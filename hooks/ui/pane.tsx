@@ -180,7 +180,7 @@ function overviewTab(el: El, snap: Snapshot, width: number): RenderElement {
   if (usage !== null) facts.push(duration(now - usage.startedAt))
   facts.push(L.turns(turns.count))
   facts.push(L.overview.tools(turns.tools))
-  if (snap.showCost && usage?.costUsd !== undefined) facts.push(money(usage.costUsd))
+  if (snap.showCost && usage?.costUsd !== undefined && usage.costUsd >= 0.005) facts.push(money(usage.costUsd))
   const avgCost = costs.length > 0 ? costs.reduce((s, c) => s + c, 0) / costs.length : 0
   if (snap.showCost && avgCost >= 0.005) facts.push(L.overview.perTurnCost(money(avgCost)))
   rows.push(<Text>{facts.join(' · ')}</Text>)

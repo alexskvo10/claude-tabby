@@ -25,6 +25,8 @@ export type World = {
   ran: string[][]
   tests: { exitCode: number; stdout: string }
   usage: { percent: number; fiveHour: number }
+  /** a session before its first answer: no fill, no limits, no cost */
+  isFresh: boolean
   pr: string | null
   gitDirty: boolean
   context: string[][]
@@ -51,6 +53,7 @@ export function world(
     ran: [],
     tests: { exitCode: 1, stdout: RED },
     usage: { percent: 48, fiveHour: 23 },
+    isFresh: false,
     pr: null,
     gitDirty: true,
     context: [],
@@ -70,7 +73,9 @@ export function world(
     value: { root: '/repo', remote: 'git@github.com:alexskvo10/claude-tab.git', internal: false, name: null },
   }))
   on('session.usage', () => ({
-    value: {
+    value: w.isFresh
+      ? { startedAt: NOW - 60_000, context: { window: 1_000_000 }, rateLimits: [], cost: { usd: 0 } }
+      : {
       startedAt: NOW - 72 * 60_000,
       context: { tokens: w.usage.percent * 2000, window: 200_000, percent: w.usage.percent },
       rateLimits: [
