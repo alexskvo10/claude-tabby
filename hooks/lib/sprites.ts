@@ -1,6 +1,7 @@
 // Tabby in pixels. Letters are palette keys, '.' is transparent:
 //   O fur   D outline   L light belly   K eye   W eye shine   P nose/pink
-//   Z sleep z   T tear   Y sparkle   S screen   G screen glow
+//   Z, z sleep   T tear   Y sparkle   S screen   G screen glow
+//   E darker fur (a shut eye)   B blush   R inner ear
 import type { Rgb, Sprite } from './pixels'
 import { rgb, sprite } from './pixels'
 
@@ -16,16 +17,17 @@ export const PALETTE: Record<string, Rgb> = {
   Y: rgb('#FFD866'),
   S: rgb('#3B4252'),
   G: rgb('#7FD4C1'),
+  E: rgb('#B9663F'),
+  B: rgb('#F3A0A8'),
+  R: rgb('#F4A3B5'),
+  z: rgb('#7C8DB0'),
 }
 
-// ---------------------------------------------------------------- band: 10 x 4
-
-const HEAD = (eyes: string, mouth: string, extra: [string, string] = ['..........', '..........']) => [
-  merge('.D......D.', extra[0]),
-  merge('.DOOOOOOD.', extra[1]),
-  `.O${eyes}O.`,
-  `..O${mouth}O..`,
-]
+// ---------------------------------------------------------------- band: 11 x 6
+//
+// A round face in three terminal rows: pink-lined ears, eyes with a shine,
+// blush, a small nose over a light muzzle. Two columns on the right hold the
+// sleepy z and the sparkles, so every frame keeps one size.
 
 /** Lays `over` on `base`: its non-dot letters win. */
 function merge(base: string, over: string): string {
@@ -34,15 +36,42 @@ function merge(base: string, over: string): string {
     .join('')
 }
 
+const FACE = [
+  '.O.....O...',
+  'OPO...OPO..',
+  'OOOOOOOOO..',
+  'O{e}OOO{e}O..',
+  'BOOOPOOOB..',
+  '.OOLLLOO...',
+]
+
+/** The face with its eyes (two pixels each) and overlays by row. */
+function head(eyes: string, extra: Record<number, string> = {}): string[] {
+  return FACE.map((row, i) => {
+    const out = row.replaceAll('{e}', eyes)
+    return extra[i] !== undefined ? merge(out, extra[i]!) : out
+  })
+}
+
+const EYES_OPEN = 'KW'
+const EYES_LEFT = 'WK'
+const EYES_SHUT = 'EE'
+
 export type Mood = 'happy' | 'work' | 'sad' | 'sleep' | 'proud' | 'focus'
 
 const SMALL_FRAMES: Record<Mood, readonly (readonly string[])[]> = {
-  happy: [HEAD('KOOOOK', 'OPPO'), HEAD('KOOOOK', 'OPPO'), HEAD('KOOOOK', 'OPPO'), HEAD('DOOOOD', 'OPPO')],
-  work: [HEAD('OKOOOK', 'OPPO'), HEAD('KOOOKO', 'OPPO'), HEAD('OKOOOK', 'OPPO'), HEAD('DOOOOD', 'OPPO')],
-  sad: [HEAD('KOOOOK', 'ODDO', ['..........', '..........']).map((r, i) => (i === 3 ? '.TO' + r.slice(3) : r))],
-  sleep: [HEAD('DOOOOD', 'OPPO', ['.........Z', '..........']), HEAD('DOOOOD', 'OPPO', ['........Z.', '.........Z'])],
-  proud: [HEAD('KOOOOK', 'PPPP', ['Y........Y', '..........']), HEAD('KOOOOK', 'PPPP', ['.........Y', 'Y.........'])],
-  focus: [HEAD('KOOOOK', 'ODDO')],
+  // frames before the last are open; the last is the blink
+  happy: [head(EYES_OPEN), head(EYES_OPEN), head(EYES_OPEN), head(EYES_SHUT)],
+  // eyes darting over the screen while Claude types
+  work: [head(EYES_OPEN), head(EYES_LEFT), head(EYES_OPEN), head(EYES_SHUT)],
+  sad: [head(EYES_OPEN, { 4: '.T....T....' }), head(EYES_OPEN, { 5: '.T....T....' })],
+  sleep: [
+    head(EYES_SHUT, { 0: '.........z.' }),
+    head(EYES_SHUT, { 0: '..........Z', 1: '.........z.' }),
+    head(EYES_SHUT, { 0: '.........Z.', 1: '..........z' }),
+  ],
+  proud: [head(EYES_OPEN, { 0: 'Y.........Y', 2: '..........Y' }), head(EYES_OPEN, { 1: '.........Y.', 3: '..........Y' })],
+  focus: [head(EYES_OPEN)],
 }
 
 // ---------------------------------------------------------------- pane: 20 x 16
@@ -113,7 +142,7 @@ function pick<T>(frames: readonly T[], frame: number): T {
   return frames[((frame % frames.length) + frames.length) % frames.length]!
 }
 
-/** The band's cat, 10 x 4 pixels: 10 cells across, 2 rows. */
+/** The band's cat, 11 x 6 pixels: 11 cells across, 3 rows. */
 export function smallCat(mood: Mood, frame: number): Sprite {
   return sprite(pick(SMALL_FRAMES[mood], frame), PALETTE)
 }

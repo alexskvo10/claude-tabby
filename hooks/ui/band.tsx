@@ -1,7 +1,8 @@
 // The band above the prompt: two calm rows, or one in compact mode.
 //   left    Tabby in pixel art, animated (terminal), or as a face in text
 //   row 1   the session: context, rate limits, cost
-//   row 2   the work: live or last turn, git, tests, Claude's plan, focus, todo
+//   row 2   the work: live or last turn, git, tests
+//   row 3   the tasks: Claude's plan, focus, todo (beside the pixel cat; else on row 2)
 // Blocks sit in groups with thin rules between them. Every block is a hover
 // target whose card covers the other row; its label is a button to its tab.
 import type { RenderElement } from 'claude-code'
@@ -35,7 +36,7 @@ import {
 } from './parts'
 
 const OPEN = '≡'
-const CAT_COLUMNS = 10
+const CAT_COLUMNS = 11
 
 export type BandProps = { bodyColumns: number; isWorking: boolean }
 
@@ -182,20 +183,23 @@ export function drawBand(el: El, snap: Snapshot, props: BandProps, on: Handlers)
     measure,
   )
 
-  const work = fit(
-    present([
-      working ?? lastTurnSeg(last, turns.count, on),
-      gitSeg(git, on),
-      testsSeg(tests, now, on),
-      planSeg(plan, isWide ? 28 : 14, on),
-      focusSeg(focus, now, isWide ? 28 : 18, on),
-      ...todoSegs(todos, isWide ? 28 : 16, on),
-    ]),
-    rowsWidth,
-    measure,
-  )
+  const turnSegs = present([working ?? lastTurnSeg(last, turns.count, on), gitSeg(git, on), testsSeg(tests, now, on)])
+  const taskSegs = present([
+    planSeg(plan, isWide ? 28 : 14, on),
+    focusSeg(focus, now, isWide ? 28 : 18, on),
+    ...todoSegs(todos, isWide ? 28 : 16, on),
+  ])
+  // the pixel cat stands three rows tall: the work splits into the turn and
+  // the tasks; without it the work keeps to one row
+  const work = fit(hasCat ? turnSegs : [...turnSegs, ...taskSegs], rowsWidth, measure)
+  const tasks = hasCat ? fit(taskSegs, rowsWidth, measure) : []
 
-  const intro = prefs.introSeen <= 3 ? <Text dimColor wrap="truncate-end">{truncate(L.band.intro, props.bodyColumns)}</Text> : null
+  const isIntro = prefs.introSeen <= 3
+  const introLine = (w: number) => (
+    <Text dimColor wrap="truncate-end">
+      {truncate(L.band.intro, w)}
+    </Text>
+  )
 
   const cat =
     hasCat && Raster !== undefined ? (
@@ -204,20 +208,28 @@ export function drawBand(el: El, snap: Snapshot, props: BandProps, on: Handlers)
       </Box>
     ) : null
 
-  // cards need the other row to lie over; without one there is nowhere to show them
+  const rows: RenderElement[] = [
+    <Box flexDirection="row" justifyContent="space-between">
+      {Row(el, session, 'session', rowsWidth, work.length > 0 || hasCat ? 1 : undefined)}
+      {open}
+    </Box>,
+    work.length > 0 ? Row(el, work, 'work', rowsWidth, -1) : <Text> </Text>,
+  ]
+  if (hasCat) {
+    // the third row: the tasks, else the first sessions' hint, else room for the cat
+    rows.push(tasks.length > 0 ? Row(el, tasks, 'tasks', rowsWidth, -1) : isIntro ? introLine(rowsWidth) : <Text> </Text>)
+  }
+  const isIntroBelow = isIntro && (!hasCat || tasks.length > 0)
+
   const tree = (
     <Box flexDirection="column" width={props.bodyColumns}>
       <Box flexDirection="row">
         {cat}
         <Box flexDirection="column" width={rowsWidth}>
-          <Box flexDirection="row" justifyContent="space-between">
-            {Row(el, session, 'session', rowsWidth, work.length > 0 ? 1 : undefined)}
-            {open}
-          </Box>
-          {work.length > 0 ? Row(el, work, 'work', rowsWidth, -1) : <Text> </Text>}
+          {rows}
         </Box>
       </Box>
-      {intro}
+      {isIntroBelow ? introLine(props.bodyColumns) : null}
     </Box>
   )
   return { tree, mood: catMood, hasCat }

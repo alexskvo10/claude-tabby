@@ -301,7 +301,7 @@ describe('pixels', () => {
     expect(toCells(squares(new Array(28).fill(1), 7, () => 1))).toMatchObject({ columns: 20, rows: 6 })
     for (const m of ['happy', 'work', 'sad', 'sleep', 'proud', 'focus'] as const) {
       for (let f = 0; f < 4; f += 1) {
-        expect(toCells(smallCat(m, f)), `${m} ${f}`).toMatchObject({ columns: 10, rows: 2 })
+        expect(toCells(smallCat(m, f)), `${m} ${f}`).toMatchObject({ columns: 11, rows: 3 })
         expect(toCells(bigCat(m, f)), `${m} ${f}`).toMatchObject({ columns: 20, rows: 8 })
       }
     }

@@ -21,7 +21,10 @@ describe('band', () => {
   test('the intro hint shows in the first three sessions only', async ($, on) => {
     const w = world(on, { store: { prefs: { isCompact: false, tab: 'overview', isPetShown: true, introSeen: 3 } } })
     await boot($, w)
-    expect(await band($, 140)).toHaveLength(2)
+    const drawn = await band($, 140)
+    // the pixel cat keeps three rows; the third is blank once the hint is done
+    expect(drawn).toHaveLength(3)
+    expect(drawn.join('\n')).not.toMatch(/Tabby:/)
   })
 
   test('a reload is not a new session for the intro hint', async ($, on) => {
@@ -206,7 +209,7 @@ describe('tasks', () => {
     expect(await command($, w, 'todo', '!Написать тесты')).toBe('☐ #2 ! Написать тесты')
     expect(await command($, w, 'todo', '* Обновить резюме')).toBe('☐ #3 Обновить резюме ◆')
     // the important one leads in the band
-    expect((await band($, 140))[1]).toMatch(/☐ 0\/3 ! Написать тесты/)
+    expect((await band($, 140))[2]).toMatch(/☐ 0\/3 ! Написать тесты/)
 
     const added = await $.tool.call({ tool: 'mcp__tabby__todo', action: 'add', text: 'README', important: true } as never)
     expect(String(added.result)).toMatch(/Added #4/)
@@ -240,11 +243,11 @@ describe('tasks', () => {
       ['Read the code', 'Write the fix', 'Run the tests'].map((content, i) => ({ content, activeForm: `${content.replace(/^(\w+)/, '$1ing')}`, status: s[i] }))
     await $.turn.start({ text: 'go', turnId: 'p' })
     await $.tool.call({ tool: 'TodoWrite', todos: todos(['completed', 'in_progress', 'pending']) } as never)
-    expect((await band($, 160))[1]).toMatch(/▸ план 1\/3 Writeing the fix/)
+    expect((await band($, 160))[2]).toMatch(/▸ план 1\/3 Writeing the fix/)
     expect(await card($, w, 'tasks', 'card-plan')).toMatch(/ПЛАН CLAUDE  1\/3\n.+\n✓ Read the code\n▸ Writeing the fix\n○ Run the tests/)
     await $.tool.call({ tool: 'TodoWrite', todos: todos(['completed', 'completed', 'completed']) } as never)
     await $.turn.complete({ answer: '', durationMs: 1000, isAborted: false, turnId: 'p', reason: 'answer' } as never)
-    expect((await band($, 160))[1]).not.toMatch(/план/)
+    expect((await band($, 160)).join('\n')).not.toMatch(/план/)
   })
 
   test('a subagent’s plan does not replace Claude’s', async ($, on) => {
@@ -253,7 +256,7 @@ describe('tasks', () => {
     const plan = (content: string) => [{ content, activeForm: content, status: 'in_progress' }]
     await $.tool.call({ tool: 'TodoWrite', todos: plan('Main step') } as never)
     await $.tool.call({ tool: 'TodoWrite', todos: plan('Subagent step'), agentId: 'sub-1' } as never)
-    expect((await band($, 160))[1]).toMatch(/▸ план 0\/1 Main step/)
+    expect((await band($, 160))[2]).toMatch(/▸ план 0\/1 Main step/)
   })
 
   test('Claude hears about the focus and the list only when they change', async ($, on) => {
@@ -275,14 +278,14 @@ describe('tasks', () => {
     await boot($, w)
     expect(await command($, w, 'focus', 'Плашка над вводом 25')).toBe('◎ Фокус: «Плашка над вводом» · 25 мин.')
     await w.clock.advance(10 * 60_000)
-    expect((await band($, 140))[1]).toMatch(/◎ Плашка над вводом 15м/)
+    expect((await band($, 140))[2]).toMatch(/◎ Плашка над вводом 15м/)
     expect(await card($, w, 'tasks', 'card-focus')).toMatch(/осталось 15:00 из 25 мин/)
     await w.clock.advance(15 * 60_000)
     expect(w.toasts.some(t => /25 мин фокуса позади/.test(t))).toBe(true)
     expect(w.sounds).toEqual(['assets/chime.wav'])
-    expect((await band($, 140))[1]).toMatch(/перерыв/)
+    expect((await band($, 140))[2]).toMatch(/перерыв/)
     await w.clock.advance(11 * 60_000)
-    expect((await band($, 140))[1]).not.toMatch(/◎/)
+    expect((await band($, 140)).join('\n')).not.toMatch(/◎/)
     expect(await card($, w, 'overview', 'card-today')).toMatch(/0 ходов · ◎ 25м/)
   })
 
