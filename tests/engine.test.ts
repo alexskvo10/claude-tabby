@@ -22,6 +22,14 @@ describe('band', () => {
     expect(await band($, 140)).toHaveLength(2)
   })
 
+  test('a reload is not a new session for the intro hint', async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    await boot($, w)
+    await boot($, w)
+    expect(w.store.get('prefs')).toMatchObject({ introSeen: 1 })
+  })
+
   test('never draws wider than its box, and keeps the essentials when narrow', async ($, on) => {
     const w = world(on)
     await boot($, w)
@@ -235,6 +243,15 @@ describe('tasks', () => {
     await $.tool.call({ tool: 'TodoWrite', todos: todos(['completed', 'completed', 'completed']) } as never)
     await $.turn.complete({ answer: '', durationMs: 1000, isAborted: false, turnId: 'p', reason: 'answer' } as never)
     expect((await band($, 160))[1]).not.toMatch(/план/)
+  })
+
+  test('a subagent’s plan does not replace Claude’s', async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    const plan = (content: string) => [{ content, activeForm: content, status: 'in_progress' }]
+    await $.tool.call({ tool: 'TodoWrite', todos: plan('Main step') } as never)
+    await $.tool.call({ tool: 'TodoWrite', todos: plan('Subagent step'), agentId: 'sub-1' } as never)
+    expect((await band($, 160))[1]).toMatch(/▸ план 0\/1 Main step/)
   })
 
   test('Claude hears about the focus and the list only when they change', async ($, on) => {

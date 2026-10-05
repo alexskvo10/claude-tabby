@@ -174,7 +174,10 @@ export const register: Register = (on, options) => {
       }
     }
     await step('load', () => Promise.all([a.loadPrefs(), a.loadPet(), a.loadTodos(), a.loadStats()]))
-    await step('intro', () => a.countSession())
+    // a reload (a /config change, an edit) finds the session's state already
+    // there: it is no new session for the intro hint to count
+    const isReload = (await read($, aTick)) > 0
+    if (!isReload) await step('intro', () => a.countSession())
     const bootedAt = await $.clock.now()
     await update($, aTick, () => bootedAt)
 
@@ -301,7 +304,8 @@ export const register: Register = (on, options) => {
   on('tool.call', { tool: 'TodoWrite' }, async ($, e, next) => {
     const ran = await next(e)
     const a = A
-    if (a !== undefined && ran.deny === undefined && ran.isError !== true && Array.isArray(e.todos)) {
+    // a subagent keeps a plan of its own: only the main loop's is Claude's plan
+    if (a !== undefined && e.agentId === undefined && ran.deny === undefined && ran.isError !== true && Array.isArray(e.todos)) {
       const items: TabPlanItem[] = e.todos.map(t => ({ text: t.content, active: t.activeForm, status: t.status }))
       await a.setPlan(items)
     }

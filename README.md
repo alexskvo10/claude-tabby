@@ -107,7 +107,7 @@ claude --plugin-dir ~/claude-tab
 
 ```bash
 claude plugin validate .   # манифест и модуль хуков глазами движка
-claude plugin test .       # 51 тест: утилиты, плашка, панель, команды, настройки
+claude plugin test .       # 53 теста: утилиты, плашка, панель, команды, настройки
 tsc -p .                   # после первой загрузки движок кладёт типы в .claude-plugin/types/
 ```
 
