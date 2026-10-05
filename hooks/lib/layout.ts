@@ -1,15 +1,30 @@
 import { cells } from './format'
 
-/** One run of styled text. */
-export type Part = { text: string; color?: string; dim?: boolean; bold?: boolean }
+/** One run of styled text; with `press`, a button drawn as that text. */
+export type Part = {
+  text: string
+  color?: string
+  dim?: boolean
+  bold?: boolean
+  press?: () => void
+  /** the colour the pressable text lights in under the pointer */
+  hoverColor?: string
+}
 
-/** One item of a band row; the lowest `rank` is dropped first when room runs out. */
-export type Seg = { id: string; rank: number; parts: Part[] }
+/**
+ * One item of a band row; the lowest `rank` is dropped first when room runs
+ * out. `card` is the line shown over the other row while the pointer is on it.
+ */
+export type Seg = { id: string; rank: number; parts: Part[]; card?: Part[] }
 
 export const SEPARATOR = '  '
 
+export function partsWidth(parts: readonly Part[]): number {
+  return parts.reduce((sum, p) => sum + cells(p.text), 0)
+}
+
 export function segWidth(seg: Seg): number {
-  return seg.parts.reduce((sum, p) => sum + cells(p.text), 0)
+  return partsWidth(seg.parts)
 }
 
 export function rowWidth(segs: readonly Seg[]): number {

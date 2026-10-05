@@ -2,27 +2,57 @@
 // these; render hooks only read. Each call to the engine goes through `h`.
 import type { Timer } from 'claude-code'
 
-import type { TabFocus, TabGit, TabId, TabPet, TabTests, TabTodo, TabUsage } from '../types'
+import type {
+  TabFocus,
+  TabGit,
+  TabId,
+  TabPet,
+  TabPlanItem,
+  TabPr,
+  TabTests,
+  TabTodo,
+  TabTurn,
+  TabUsage,
+} from '../types'
 import type { Host } from './host'
 import { duration, limitLabel } from './lib/format'
+import { burn, addSample } from './lib/forecast'
 import { parseLog, parseStatus, repoName } from './lib/git'
+import { L } from './lib/i18n'
 import { achievement, level, NEW_PET, XP } from './lib/pet'
-import { detectCommand, parseSummary, tail } from './lib/tests'
+import { addToDay, dayKey, streak } from './lib/stats'
+import { detectCommand, parseFailures, parseSummary, tail } from './lib/tests'
+import type { Options } from './state'
 
 const TEST_TIMEOUT = 10 * 60_000
+const PR_EVERY = 2 * 60_000
+const CHIME = 'assets/chime.wav'
 
 function same(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b)
 }
 
+function firstLine(text: string): string {
+  return text.trim().split('\n')[0]?.slice(0, 120) ?? ''
+}
+
 export type Actions = ReturnType<typeof createActions>
 
-export function createActions(h: Host) {
+export type TurnEnd = {
+  durationMs: number
+  isAborted: boolean
+  tokens: number
+}
+
+export function createActions(h: Host, opts: Options) {
   let rootCache: string | undefined
   let repoCache: { name: string | null } | undefined
   let gitBusy = false
   let gitQueued = false
   let gitTimer: Timer | undefined
+  let prAt = 0
+  let prCache: TabPr | null = null
+  let ghMissing = false
 
   async function projectRoot(): Promise<string> {
     if (rootCache === undefined) rootCache = await h.root()
@@ -36,7 +66,17 @@ export function createActions(h: Host) {
     })
   }
 
-  // -------------------------------------------------------------- pet
+  /** A toast, unless quiet mode keeps all but the critical ones away. */
+  function notify(text: string, options: { ms?: number; isCritical?: boolean } = {}): void {
+    if (opts.quiet && options.isCritical !== true) return
+    h.toast(text, { timeoutMs: options.ms ?? 5000 })
+  }
+
+  function chime(): void {
+    if (opts.sound) detach('sound', () => h.play(CHIME))
+  }
+
+  // -------------------------------------------------------------- pet & stats
 
   async function loadPet(): Promise<void> {
     const stored = await h.storeGet('pet')
@@ -50,13 +90,25 @@ export function createActions(h: Host) {
     await h.state.pet.set(() => pet)
   }
 
+  async function loadStats(): Promise<void> {
+    const stored = await h.storeGet('stats')
+    const days = stored !== null && typeof stored === 'object' ? (stored as { days?: unknown }).days : undefined
+    if (days !== null && typeof days === 'object') await h.state.stats.set(() => ({ days: days as Record<string, never> }))
+  }
+
+  async function addStats(add: Parameters<typeof addToDay>[2]): Promise<void> {
+    const now = await h.now()
+    const stats = await h.state.stats.set(s => addToDay(s, now, add))
+    await h.storeSet('stats', stats)
+  }
+
   async function updatePet(fn: (p: TabPet) => TabPet): Promise<TabPet> {
     const before = await h.state.pet.get()
     const after = await h.state.pet.set(fn)
     await h.storeSet('pet', after)
     const was = level(before.xp).level
     const now = level(after.xp).level
-    if (now > was) h.toast(`(=^▽^=)ﾉ ${after.name} достиг уровня ${now}!`, { timeoutMs: 6000 })
+    if (now > was) notify(L.toast.levelUp(L.tabs.pet, now), { ms: 6000 })
     return after
   }
 
@@ -74,48 +126,62 @@ export function createActions(h: Host) {
         ? p
         : { ...p, xp: p.xp + XP.achievement, achievements: [...p.achievements, id], lastUnlock: id, lastUnlockAt: at },
     )
-    h.toast(`★ Достижение «${a.title}» — ${a.hint.toLowerCase()}`, { timeoutMs: 6000 })
+    notify(L.toast.achievement(a.title, a.hint), { ms: 6000 })
   }
 
   // -------------------------------------------------------------- usage
 
+  /** Records that an alert fired; false when it already had. */
+  async function mark(key: string): Promise<boolean> {
+    if ((await h.state.alerts.get()).includes(key)) return false
+    await h.state.alerts.set(a => (a.includes(key) ? a : [...a, key].slice(-60)))
+    return true
+  }
+
+  async function alertOnce(key: string, text: string, ms: number): Promise<boolean> {
+    if (!(await mark(key))) return false
+    notify(text, { ms, isCritical: true })
+    return true
+  }
+
   async function checkAlerts(u: TabUsage): Promise<void> {
-    const fired = await h.state.alerts.get()
-    const add: string[] = []
     const ctx = u.percent ?? 0
     // after a /compact the context warnings may come again
-    const keep = ctx < 70 ? fired.filter(a => !a.startsWith('ctx:')) : fired
-
-    if (ctx >= 90 && !keep.includes('ctx:90')) {
-      add.push('ctx:90', 'ctx:80')
-      h.toast('Контекст заполнен на 90% — самое время для /compact', { timeoutMs: 8000 })
+    if (ctx < opts.warnContext - 10) {
+      const fired = await h.state.alerts.get()
+      if (fired.some(a => a.startsWith('ctx:'))) await h.state.alerts.set(a => a.filter(x => !x.startsWith('ctx:')))
+    }
+    const high = Math.max(opts.warnContext + 1, 90)
+    if (ctx >= high) {
+      if (await alertOnce(`ctx:${high}`, L.toast.ctxHigh, 8000)) await mark(`ctx:${opts.warnContext}`)
       await unlock('deep')
-    } else if (ctx >= 80 && !keep.includes('ctx:80')) {
-      add.push('ctx:80')
-      h.toast('Контекст заполнен на 80% — скоро понадобится /compact', { timeoutMs: 6000 })
+    } else if (ctx >= opts.warnContext) {
+      await alertOnce(`ctx:${opts.warnContext}`, L.toast.ctxWarn(Math.round(ctx)), 6000)
     }
 
     const now = await h.now()
+    const samples = await h.state.samples.get()
     for (const l of u.limits) {
       const key = `${l.kind}:${l.resetsAt ?? ''}`
       const left = l.resetsAt ? Date.parse(l.resetsAt) - now : NaN
-      const resets = Number.isNaN(left) ? '' : ` · сброс через ${duration(left)}`
-      if (l.percent >= 95 && !keep.includes(`${key}:95`)) {
-        add.push(`${key}:95`, `${key}:80`)
-        h.toast(`Лимит ${limitLabel(l.kind)} почти исчерпан: ${Math.round(l.percent)}%${resets}`, { timeoutMs: 8000 })
-      } else if (l.percent >= 80 && !keep.includes(`${key}:80`)) {
-        add.push(`${key}:80`)
-        h.toast(`Лимит ${limitLabel(l.kind)} израсходован на ${Math.round(l.percent)}%${resets}`, { timeoutMs: 6000 })
+      const resets = Number.isNaN(left) ? '' : L.toast.resetsIn(duration(left))
+      const label = limitLabel(l.kind)
+      if (l.percent >= 95) {
+        if (await alertOnce(`${key}:95`, L.toast.limitHigh(label, Math.round(l.percent), resets), 8000)) await mark(`${key}:warn`)
+      } else if (l.percent >= opts.warnLimit) {
+        await alertOnce(`${key}:warn`, L.toast.limitWarn(label, Math.round(l.percent), resets), 6000)
+      } else {
+        const b = burn(samples, l.kind, now, Number.isNaN(left) ? undefined : left)
+        if (b?.runsOutInMs !== undefined && l.percent >= 25) {
+          await alertOnce(`${key}:pace`, L.toast.limitPace(label, duration(b.runsOutInMs)), 8000)
+        }
       }
-    }
-
-    if (add.length > 0 || keep.length !== fired.length) {
-      await h.state.alerts.set(() => [...keep, ...add].slice(-50))
     }
   }
 
-  async function refreshUsage(): Promise<void> {
+  async function refreshUsage(): Promise<TabUsage> {
     const u = await h.usage()
+    const now = await h.now()
     const next: TabUsage = {
       tokens: u.context.tokens,
       window: u.context.window,
@@ -126,10 +192,138 @@ export function createActions(h: Host) {
     }
     const prev = await h.state.usage.get()
     if (!same(prev, next)) await h.state.usage.set(() => next)
+    if (next.limits.length > 0) {
+      await h.state.samples.set(s =>
+        next.limits.reduce((acc, l) => addSample(acc, { at: now, kind: l.kind, percent: l.percent, resetsAt: l.resetsAt }), s),
+      )
+    }
     await checkAlerts(next)
+    return next
+  }
+
+  // -------------------------------------------------------------- turns
+
+  async function startTurn(): Promise<void> {
+    const startedAt = await h.now()
+    const usage = await h.state.usage.get()
+    await h.state.live.set(() => ({
+      startedAt,
+      tools: 0,
+      errors: 0,
+      edits: 0,
+      ranTests: false,
+      lastTool: '',
+      costAtStart: usage?.costUsd,
+    }))
+    await h.state.tick.set(() => startedAt)
+  }
+
+  async function countTool(name: string, isEdit: boolean): Promise<void> {
+    await h.state.live.set(l => (l === null ? l : { ...l, tools: l.tools + 1, lastTool: name, edits: l.edits + (isEdit ? 1 : 0) }))
+    await h.state.turns.set(t => ({ ...t, tools: t.tools + 1 }))
+  }
+
+  async function countError(): Promise<void> {
+    await h.state.live.set(l => (l === null ? l : { ...l, errors: l.errors + 1 }))
+  }
+
+  async function finishTurn(end: TurnEnd): Promise<void> {
+    const now = await h.now()
+    const live = await h.state.live.get()
+    let usage: TabUsage | null = null
+    try {
+      usage = await refreshUsage()
+    } catch {
+      usage = await h.state.usage.get()
+    }
+    const cost =
+      usage?.costUsd !== undefined && live?.costAtStart !== undefined ? Math.max(0, usage.costUsd - live.costAtStart) : undefined
+    const turn: TabTurn = {
+      ms: end.durationMs,
+      tools: live?.tools ?? 0,
+      errors: live?.errors ?? 0,
+      tokens: end.tokens,
+      context: usage?.tokens,
+      costUsd: cost,
+      at: now,
+    }
+    await h.state.live.set(() => null)
+    await h.state.turns.set(t => ({ ...t, count: t.count + 1, history: [...t.history, turn].slice(-40) }))
+    await h.state.tick.set(() => now)
+    await addStats({ turns: 1, tools: turn.tools, costUsd: cost ?? 0 })
+
+    if (!end.isAborted && end.durationMs >= 90_000) {
+      notify(L.toast.turnDone(duration(end.durationMs), turn.tools))
+      chime()
+    }
+
+    const pet = await updatePet(p => ({
+      ...p,
+      xp: p.xp + XP.turn,
+      totals: { ...p.totals, turns: p.totals.turns + 1, tools: p.totals.tools + turn.tools },
+    }))
+    await unlock('first')
+    if (pet.totals.turns >= 50) await unlock('chatty')
+    if (pet.totals.tools >= 200) await unlock('toolsmith')
+    if (!end.isAborted && turn.tools >= 10 && turn.errors === 0) await unlock('clean')
+    if (!end.isAborted && turn.tools >= 1 && turn.ms < 10_000) await unlock('lightning')
+    if (new Date(now).getHours() < 5) await unlock('owl')
+    if (usage !== null && now - usage.startedAt >= 2 * 3_600_000) await unlock('marathon')
+    const days = streak(await h.state.stats.get(), now)
+    if (days >= 3) await unlock('streak3')
+    if (days >= 7) await unlock('streak7')
+
+    // the plan is done once every step is: it leaves the band
+    const plan = await h.state.plan.get()
+    if (plan.length > 0 && plan.every(p => p.status === 'completed')) await h.state.plan.set(() => [])
+
+    if (opts.autoTests && !end.isAborted && live !== null && live.edits > 0 && !live.ranTests) {
+      detach('tests', () => runTests('auto'))
+    }
+    refreshGitSoon()
   }
 
   // -------------------------------------------------------------- git
+
+  async function readPr(cwd: string): Promise<TabPr | null> {
+    if (ghMissing) return null
+    const now = await h.now()
+    if (now - prAt < PR_EVERY) return prCache
+    prAt = now
+    try {
+      const ran = await h.run(['gh', 'pr', 'view', '--json', 'number,title,url,state,isDraft,statusCheckRollup'], {
+        cwd,
+        timeoutMs: 20_000,
+      })
+      if (ran.exitCode !== 0) {
+        prCache = null
+        return null
+      }
+      const raw = JSON.parse(ran.stdout) as {
+        number: number
+        title: string
+        url: string
+        state: string
+        isDraft: boolean
+        statusCheckRollup?: { status?: string; conclusion?: string; state?: string }[]
+      }
+      const checks = { passed: 0, failed: 0, pending: 0 }
+      for (const c of raw.statusCheckRollup ?? []) {
+        const verdict = (c.conclusion || c.state || c.status || '').toUpperCase()
+        if (['SUCCESS', 'NEUTRAL', 'SKIPPED'].includes(verdict)) checks.passed += 1
+        else if (['FAILURE', 'ERROR', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE'].includes(verdict)) checks.failed += 1
+        else checks.pending += 1
+      }
+      prCache = { number: raw.number, title: raw.title, url: raw.url, state: raw.state, isDraft: raw.isDraft, checks }
+      if (checks.passed > 0 && checks.failed === 0 && checks.pending === 0) await unlock('shipit')
+      return prCache
+    } catch {
+      // gh is not installed, or is not on PATH: stop asking
+      ghMissing = true
+      prCache = null
+      return null
+    }
+  }
 
   async function readGit(): Promise<void> {
     const cwd = await projectRoot()
@@ -142,19 +336,27 @@ export function createActions(h: Host) {
       if ((await h.state.git.get()) !== null) await h.state.git.set(() => null)
       return
     }
-    const log = await h.run(['git', 'log', '-5', '--pretty=format:%h%x1f%ct%x1f%s'], { cwd, timeoutMs: 15_000 })
+    const [log, stashes] = await Promise.all([
+      h.run(['git', 'log', '-5', '--pretty=format:%h%x1f%ct%x1f%s'], { cwd, timeoutMs: 15_000 }),
+      h.run(['git', 'stash', 'list'], { cwd, timeoutMs: 15_000 }),
+    ])
     if (repoCache === undefined) {
       const repo = await h.repo()
       repoCache = { name: repo?.name ?? repoName(repo?.remote) }
     }
+    const pr = await readPr(cwd)
     const prev = await h.state.git.get()
     const body = {
       ...parseStatus(status.stdout),
       repo: repoCache.name,
       commits: log.exitCode === 0 ? parseLog(log.stdout) : [],
+      stashes: stashes.exitCode === 0 ? stashes.stdout.split('\n').filter(l => l.trim() !== '').length : 0,
+      pr,
     }
-    if (prev !== null && same({ ...prev, at: 0 }, { ...body, at: 0 })) return
-    const next: TabGit = { ...body, at: await h.now() }
+    const at = await h.now()
+    // the time of the check moves the "checked" line only once a minute
+    if (prev !== null && same({ ...prev, at: 0 }, { ...body, at: 0 }) && at - prev.at < 60_000) return
+    const next: TabGit = { ...body, at }
     await h.state.git.set(() => next)
   }
 
@@ -175,9 +377,56 @@ export function createActions(h: Host) {
   }
 
   /** Refreshes git a moment after the last call, so a burst of edits reads once. */
-  function refreshGitSoon(): void {
+  function refreshGitSoon(forcePr = false): void {
+    if (forcePr) prAt = 0
     gitTimer?.cancel()
     gitTimer = h.after(1200, () => detach('git', refreshGit))
+  }
+
+  async function commitAll(message: string): Promise<void> {
+    const msg = message.trim()
+    if (msg === '') return
+    const cwd = await projectRoot()
+    const added = await h.run(['git', 'add', '-A'], { cwd, timeoutMs: 30_000 })
+    if (added.exitCode !== 0) {
+      notify(L.git.commitFailed(firstLine(added.stderr)), { isCritical: true })
+      return
+    }
+    const ran = await h.run(['git', 'commit', '-m', msg], { cwd, timeoutMs: 60_000 })
+    if (ran.exitCode === 0) {
+      notify(L.git.committed(msg))
+      await unlock('committer')
+    } else if (/nothing to commit|nothing added/.test(ran.stdout + ran.stderr)) {
+      notify(L.git.nothing)
+    } else {
+      notify(L.git.commitFailed(firstLine(ran.stderr || ran.stdout)), { isCritical: true, ms: 8000 })
+    }
+    await refreshGit()
+  }
+
+  /** A press that only acts on its second press within five seconds. */
+  async function confirmed(key: string): Promise<boolean> {
+    const now = await h.now()
+    const c = await h.state.confirm.get()
+    if (c !== null && c.key === key && now <= c.until) {
+      await h.state.confirm.set(() => null)
+      return true
+    }
+    await h.state.confirm.set(() => ({ key, until: now + 5000 }))
+    h.after(5200, () => detach('confirm', () => h.state.confirm.set(x => (x !== null && x.key === key && x.until <= now + 5000 ? null : x))))
+    return false
+  }
+
+  async function stash(): Promise<void> {
+    if (!(await confirmed('stash'))) return
+    const cwd = await projectRoot()
+    const ran = await h.run(['git', 'stash', 'push', '-u', '-m', `tabby ${new Date(await h.now()).toISOString()}`], {
+      cwd,
+      timeoutMs: 60_000,
+    })
+    if (ran.exitCode === 0) notify(L.git.stashed)
+    else notify(L.git.stashFailed(firstLine(ran.stderr || ran.stdout)), { isCritical: true })
+    await refreshGit()
   }
 
   // -------------------------------------------------------------- tests
@@ -204,13 +453,14 @@ export function createActions(h: Host) {
   }
 
   /** Marks a run as started; false when one is already running. */
-  async function beginTests(command: string, by: 'button' | 'claude'): Promise<boolean> {
+  async function beginTests(command: string, by: 'button' | 'claude' | 'auto'): Promise<boolean> {
     const prev = await h.state.tests.get()
     if (prev.status === 'running') return false
     const startedAt = await h.now()
     const next: TabTests = { ...prev, status: 'running', command, startedAt, by, previous: prev.status }
     await h.state.tests.set(() => next)
     await h.state.tick.set(() => startedAt)
+    if (by === 'claude') await h.state.live.set(l => (l === null ? l : { ...l, ranTests: true }))
     return true
   }
 
@@ -225,54 +475,54 @@ export function createActions(h: Host) {
     const now = await h.now()
     const summary = parseSummary(run.output)
     const isFailed = run.isFailed || (summary.failed ?? 0) > 0
+    const status: 'pass' | 'fail' = isFailed ? 'fail' : 'pass'
     const next: TabTests = {
       ...prev,
-      status: isFailed ? 'fail' : 'pass',
+      status,
       passed: summary.passed,
       failed: summary.failed,
       total: summary.total,
       ms: now - (prev.startedAt ?? now),
       at: now,
       tail: tail(run.output, 40),
+      failures: isFailed ? parseFailures(run.output) : [],
+      history: [...prev.history, { status, at: now, failed: summary.failed }].slice(-24),
     }
     await h.state.tests.set(() => next)
     await h.state.tick.set(() => now)
 
+    const isMine = prev.by === 'button' || prev.by === 'auto'
     if (!isFailed) {
       if (prev.previous !== 'pass') await gainXp(XP.testsGreen)
       await unlock('green')
       if (prev.previous === 'fail') {
         await unlock('comeback')
-        h.toast('Тесты снова зелёные ✓  Таби доволен (=^▽^=)')
-      } else if (prev.by === 'button') {
-        h.toast(`✓ Тесты прошли${summary.total !== undefined ? `: ${summary.total}` : ''}`)
+        notify(L.toast.testsBack)
+      } else if (isMine) {
+        notify(L.toast.testsPass(summary.total))
       }
-    } else if (prev.by === 'button') {
-      h.toast(
-        summary.failed !== undefined && summary.failed > 0
-          ? `✗ Упало тестов: ${summary.failed}`
-          : '✗ Тесты не прошли — подробности на вкладке «Тесты»',
-        { timeoutMs: 6000 },
-      )
+    } else if (isMine) {
+      notify(L.toast.testsFail(summary.failed), { ms: 6000, isCritical: true })
     }
   }
 
   /** Runs the project's tests on the host. */
-  async function runTests(): Promise<void> {
+  async function runTests(by: 'button' | 'auto' = 'button'): Promise<void> {
     const command = await testCommand()
     if (command === null) {
       await h.state.tests.set(t => ({ ...t, command: null }))
-      h.toast('Не нашёл команду тестов. Задайте её: /test <команда>', { timeoutMs: 6000 })
+      if (by === 'button') notify(L.toast.noTestCmd, { ms: 6000, isCritical: true })
       return
     }
-    if (!(await beginTests(command, 'button'))) {
-      h.toast('Тесты уже идут…')
+    if (!(await beginTests(command, by))) {
+      if (by === 'button') notify(L.toast.testsBusy)
       return
     }
     let output = ''
     let isFailed = true
     try {
-      const ran = await h.run(['sh', '-c', command], {
+      const argv = h.isWindows() ? ['cmd.exe', '/d', '/s', '/c', command] : ['sh', '-c', command]
+      const ran = await h.run(argv, {
         cwd: await projectRoot(),
         timeoutMs: TEST_TIMEOUT,
         env: { CI: '1', FORCE_COLOR: '0', NO_COLOR: '1' },
@@ -280,32 +530,81 @@ export function createActions(h: Host) {
       output = `${ran.stdout}\n${ran.stderr}`
       isFailed = ran.exitCode !== 0
     } catch (error) {
-      output = `Не удалось выполнить «${command}»: ${error instanceof Error ? error.message : String(error)}`
+      output = `${command}: ${error instanceof Error ? error.message : String(error)}`
     }
     await finishTests({ output, isFailed })
   }
 
+  /** Puts a request to fix failing tests in the prompt box. */
+  async function askToFix(names?: readonly string[]): Promise<void> {
+    const t = await h.state.tests.get()
+    const list = names ?? t.failures
+    const text =
+      list.length === 1
+        ? L.prompt.fixTest(list[0]!)
+        : `${L.prompt.fixTests}${list.length > 0 ? `\n${list.map(n => `- ${n}`).join('\n')}` : ` ${t.command ?? ''}`}`
+    await h.fill(text)
+  }
+
   // -------------------------------------------------------------- todos
 
+  function todoKey(isGlobal: boolean, root: string): string {
+    return isGlobal ? 'todos:*' : `todos:${root}`
+  }
+
   async function saveTodos(list: TabTodo[]): Promise<void> {
-    await h.storeSet(`todos:${await projectRoot()}`, list)
+    const root = await projectRoot()
+    await h.storeSet(todoKey(false, root), list.filter(t => t.isGlobal !== true))
+    await h.storeSet(todoKey(true, root), list.filter(t => t.isGlobal === true))
   }
 
   async function loadTodos(): Promise<void> {
-    const stored = await h.storeGet(`todos:${await projectRoot()}`)
-    const list = Array.isArray(stored) ? (stored as TabTodo[]) : []
-    await h.state.todos.set(() => list)
+    const root = await projectRoot()
+    const read = async (key: string) => {
+      const v = await h.storeGet(key)
+      return Array.isArray(v) ? (v as TabTodo[]) : []
+    }
+    const local = await read(todoKey(false, root))
+    const global = (await read(todoKey(true, root))).map(t => ({ ...t, isGlobal: true }))
+    await h.state.todos.set(() => [...global, ...local])
   }
 
-  async function addTodo(text: string, by: 'user' | 'claude'): Promise<TabTodo | null> {
-    const clean = text.trim().replace(/\s+/g, ' ').slice(0, 200)
-    if (clean === '') return null
-    const list = await h.state.todos.set(l => {
-      const id = l.reduce((max, t) => Math.max(max, t.id), 0) + 1
-      return [...l, { id, text: clean, done: false, by }]
-    })
+  /** Reads "!" (important) and "*" (every project) off the front of a task. */
+  function parseTodo(text: string): { text: string; isHigh: boolean; isGlobal: boolean } {
+    let rest = text.trim()
+    let isHigh = false
+    let isGlobal = false
+    for (;;) {
+      if (rest.startsWith('!')) isHigh = true
+      else if (rest.startsWith('*')) isGlobal = true
+      else break
+      rest = rest.slice(1).trimStart()
+    }
+    return { text: rest.replace(/\s+/g, ' ').slice(0, 200), isHigh, isGlobal }
+  }
+
+  async function addTodo(
+    raw: string,
+    by: 'user' | 'claude',
+    flags: { isHigh?: boolean; isGlobal?: boolean } = {},
+  ): Promise<TabTodo | null> {
+    const parsed = parseTodo(raw)
+    if (parsed.text === '') return null
+    const seqStored = await h.storeGet('todo-seq')
+    const known = (await h.state.todos.get()).reduce((max, t) => Math.max(max, t.id), 0)
+    const id = Math.max(known, typeof seqStored === 'number' ? seqStored : 0) + 1
+    await h.storeSet('todo-seq', id)
+    const item: TabTodo = {
+      id,
+      text: parsed.text,
+      done: false,
+      by,
+      ...(parsed.isHigh || flags.isHigh ? { isHigh: true } : {}),
+      ...(parsed.isGlobal || flags.isGlobal ? { isGlobal: true } : {}),
+    }
+    const list = await h.state.todos.set(l => [...l, item])
     await saveTodos(list)
-    return list.at(-1) ?? null
+    return item
   }
 
   async function setTodoDone(id: number, done: boolean): Promise<TabTodo | null> {
@@ -329,6 +628,11 @@ export function createActions(h: Host) {
     if (item !== undefined) await setTodoDone(id, !item.done)
   }
 
+  async function toggleHigh(id: number): Promise<void> {
+    const list = await h.state.todos.set(l => l.map(t => (t.id === id ? { ...t, isHigh: t.isHigh !== true } : t)))
+    await saveTodos(list)
+  }
+
   async function removeTodo(id: number): Promise<boolean> {
     if (!(await h.state.todos.get()).some(t => t.id === id)) return false
     const list = await h.state.todos.set(l => l.filter(t => t.id !== id))
@@ -341,11 +645,16 @@ export function createActions(h: Host) {
     await saveTodos(list)
   }
 
+  async function setPlan(items: readonly TabPlanItem[]): Promise<void> {
+    await h.state.plan.set(() => items.slice(0, 30))
+  }
+
   // -------------------------------------------------------------- focus
 
   async function startFocus(goal: string, minutes: number): Promise<TabFocus | null> {
     const clean = goal.trim().replace(/\s+/g, ' ').slice(0, 120)
     if (clean === '') return null
+    await stopFocus()
     const next: TabFocus = {
       goal: clean,
       startedAt: await h.now(),
@@ -356,9 +665,19 @@ export function createActions(h: Host) {
     return next
   }
 
+  async function recordFocus(ms: number): Promise<void> {
+    if (ms < 60_000) return
+    await addStats({ focusMs: ms })
+    const now = await h.now()
+    if (((await h.state.stats.get()).days[dayKey(now)]?.focusMs ?? 0) >= 2 * 3_600_000) await unlock('deepwork')
+  }
+
   async function stopFocus(): Promise<TabFocus | null> {
     const prev = await h.state.focus.get()
-    if (prev !== null) await h.state.focus.set(() => null)
+    if (prev === null) return null
+    await h.state.focus.set(() => null)
+    // a finished pomodoro was counted when it finished
+    if (!prev.isNotified) await recordFocus((await h.now()) - prev.startedAt)
     return prev
   }
 
@@ -370,7 +689,9 @@ export function createActions(h: Host) {
     const span = f.minutes * 60_000
     if (!f.isNotified && elapsed >= span) {
       await h.state.focus.set(x => (x === null ? x : { ...x, isNotified: true }))
-      h.toast(`◎ ${f.minutes} мин фокуса позади — сделайте перерыв. Таби гордится вами`, { timeoutMs: 10_000 })
+      notify(L.toast.focusDone(f.minutes), { ms: 10_000, isCritical: true })
+      chime()
+      await recordFocus(span)
       await gainXp(XP.focusDone)
       await unlock('flow')
     } else if (f.isNotified && elapsed >= span + 10 * 60_000) {
@@ -389,6 +710,12 @@ export function createActions(h: Host) {
 
   async function savePrefs(): Promise<void> {
     await h.storeSet('prefs', await h.state.prefs.get())
+  }
+
+  /** Counts a session toward the intro hint, which shows in the first three. */
+  async function countSession(): Promise<void> {
+    await h.state.prefs.set(p => ({ ...p, introSeen: p.introSeen + 1 }))
+    await savePrefs()
   }
 
   async function setTab(tab: TabId): Promise<void> {
@@ -410,35 +737,50 @@ export function createActions(h: Host) {
 
   async function openPane(tab?: TabId): Promise<boolean> {
     if (tab !== undefined) await setTab(tab)
+    // opening the pane is the intro done
+    await h.state.prefs.set(p => (p.introSeen >= 3 ? p : { ...p, introSeen: 3 }))
+    await savePrefs()
     return (await h.open()).isPlaced
   }
 
   return {
+    opts,
     detach,
     projectRoot,
     loadPet,
+    loadStats,
     updatePet,
     gainXp,
     unlock,
     refreshUsage,
+    startTurn,
+    countTool,
+    countError,
+    finishTurn,
     refreshGit,
     refreshGitSoon,
+    commitAll,
+    stash,
     testCommand,
     setTestCommand,
     beginTests,
     cancelTests,
     finishTests,
     runTests,
+    askToFix,
     loadTodos,
     addTodo,
     setTodoDone,
     toggleTodo,
+    toggleHigh,
     removeTodo,
     clearDone,
+    setPlan,
     startFocus,
     stopFocus,
     checkFocus,
     loadPrefs,
+    countSession,
     setTab,
     toggleCompact,
     togglePet,

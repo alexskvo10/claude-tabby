@@ -1,6 +1,6 @@
 import type { TabGit, TabGitCommit, TabGitFile } from '../../types'
 
-export type GitStatus = Omit<TabGit, 'repo' | 'commits' | 'at'>
+export type GitStatus = Omit<TabGit, 'repo' | 'commits' | 'at' | 'stashes' | 'pr'>
 
 const MAX_FILES = 200
 

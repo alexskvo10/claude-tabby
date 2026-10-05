@@ -22,7 +22,8 @@ export function lines(node: Node): string[] {
   else if (node.type === 'Button') {
     const label = String(p.label ?? textOf(node))
     out = [p.plain ? (p.hotkey ? `${String(p.hotkey)}: ${label}` : label) : `[ ${label} ]`]
-  } else if (node.type === 'Input') out = [`${String(p.label ?? '')}${String(p.value || p.placeholder || '')}`]
+  } else if (node.type === 'Link') out = [String(p.label ?? p.href ?? '')]
+  else if (node.type === 'Input') out = [`${String(p.label ?? '')}${String(p.value || p.placeholder || '')}`]
   else if (node.type === 'Box') {
     if (p.display === 'none') return []
     const parts = kids.map(k => lines(k))

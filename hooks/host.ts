@@ -11,11 +11,15 @@ import type {
 } from 'claude-code'
 
 import type {
+  TabConfirm,
   TabFocus,
   TabGit,
+  TabLimitSample,
   TabLive,
   TabPet,
+  TabPlanItem,
   TabPrefs,
+  TabStats,
   TabTests,
   TabTodo,
   TabTurns,
@@ -36,6 +40,11 @@ export type Host = {
   log: (text: string) => void
   after: (ms: number, fn: () => void) => Timer
   open: () => Promise<UiOpenResult>
+  /** puts text in the prompt box: over an empty draft, else after it */
+  fill: (text: string) => Promise<void>
+  play: (asset: string) => Promise<void>
+  /** the host is Windows: commands run through cmd.exe, not sh */
+  isWindows: () => boolean
   state: Cells
 }
 
@@ -47,14 +56,18 @@ export type Cell<T> = {
 
 export type Cells = {
   usage: Cell<TabUsage | null>
+  samples: Cell<TabLimitSample[]>
   git: Cell<TabGit | null>
   turns: Cell<TabTurns>
   live: Cell<TabLive | null>
   todos: Cell<TabTodo[]>
+  plan: Cell<TabPlanItem[]>
   tests: Cell<TabTests>
   focus: Cell<TabFocus | null>
   pet: Cell<TabPet>
+  stats: Cell<TabStats>
   prefs: Cell<TabPrefs>
+  confirm: Cell<TabConfirm>
   alerts: Cell<string[]>
   tick: Cell<number>
 }

@@ -1,12 +1,14 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { bar, clock, compact, duration, plural, sparkline, tokens, truncate, until } from '../hooks/lib/format'
+import { bar, clock, compact, duration, minutesLeft, plural, sparkline, tokens, truncate, until } from '../hooks/lib/format'
+import { addSample, burn, contextGrowth, turnsLeft } from '../hooks/lib/forecast'
 import { parseLog, parseStatus, repoName } from '../hooks/lib/git'
 import { fit, rowWidth } from '../hooks/lib/layout'
 import type { Seg } from '../hooks/lib/layout'
+import { setLang } from '../hooks/lib/i18n'
 import { level, mood } from '../hooks/lib/pet'
-import { detectCommand, isTestCommand, parseSummary, tail } from '../hooks/lib/tests'
-import { minutesLeft } from '../hooks/ui/parts'
+import { addToDay, dayKey, lastDays, streak } from '../hooks/lib/stats'
+import { detectCommand, isTestCommand, parseFailures, parseSummary, tail } from '../hooks/lib/tests'
 
 describe('format', () => {
   test('tokens and spans read short', () => {
@@ -160,5 +162,80 @@ describe('layout and pet', () => {
     expect(mood({ ...base, isTestsRed: true })).toBe('sad')
     expect(mood({ ...base, idleMs: 20 * 60_000 })).toBe('sleep')
     expect(mood({ ...base, isWorking: true, sinceUnlockMs: 1000 })).toBe('proud')
+  })
+})
+
+describe('forecast', () => {
+  const turn = (context: number | undefined) => ({ ms: 1, tools: 0, errors: 0, tokens: 0, context, at: 0 })
+
+  test('context growth needs a few turns and skips a compaction', () => {
+    expect(contextGrowth([turn(10_000), turn(20_000)])).toBeUndefined()
+    expect(contextGrowth([turn(10_000), turn(20_000), turn(30_000)])).toBe(10_000)
+    expect(contextGrowth([turn(10_000), turn(20_000), turn(5_000), turn(15_000), turn(25_000)])).toBe(10_000)
+    expect(turnsLeft(150_000, 200_000, 10_000)).toBe(5)
+    expect(turnsLeft(150_000, 200_000, undefined)).toBeUndefined()
+  })
+
+  test('a limit burn needs ten minutes of one window', () => {
+    const at = (min: number, percent: number, resetsAt = 'r1') => ({ at: min * 60_000, kind: 'five_hour', percent, resetsAt })
+    expect(burn([at(0, 10), at(5, 20)], 'five_hour', 5 * 60_000, 3_600_000)).toBeUndefined()
+    // 30 points in 15 minutes: 120%/h; 60 left: 30 minutes, before a reset in an hour
+    const fast = burn([at(0, 10), at(15, 40)], 'five_hour', 15 * 60_000, 3_600_000)
+    expect(fast?.perHour).toBe(120)
+    expect(fast?.runsOutInMs).toBe(30 * 60_000)
+    // the same pace with the reset in 20 minutes lasts
+    expect(burn([at(0, 10), at(15, 40)], 'five_hour', 15 * 60_000, 20 * 60_000)?.runsOutInMs).toBeUndefined()
+    // a new window starts the reading over
+    expect(burn([at(0, 90, 'r0'), at(15, 5)], 'five_hour', 15 * 60_000, 3_600_000)).toBeUndefined()
+  })
+
+  test('samples keep one a minute and the last six hours', () => {
+    const s1 = addSample([], { at: 0, kind: 'k', percent: 1 })
+    expect(addSample(s1, { at: 30_000, kind: 'k', percent: 1 })).toHaveLength(1)
+    expect(addSample(s1, { at: 30_000, kind: 'k', percent: 2 })).toHaveLength(2)
+    expect(addSample(s1, { at: 7 * 3_600_000, kind: 'k', percent: 1 })).toHaveLength(1)
+  })
+})
+
+describe('stats', () => {
+  const now = new Date(2026, 9, 5, 15).getTime()
+  const at = (daysBack: number) => now - daysBack * 86_400_000
+
+  test('days add up and the streak counts back from today or yesterday', () => {
+    let s = addToDay({ days: {} }, at(0), { turns: 2, costUsd: 0.5 })
+    s = addToDay(s, at(0), { turns: 1, focusMs: 60_000 })
+    expect(s.days[dayKey(now)]).toEqual({ turns: 3, tools: 0, focusMs: 60_000, costUsd: 0.5 })
+    s = addToDay(addToDay(s, at(1), { turns: 1 }), at(2), { turns: 1 })
+    expect(streak(s, now)).toBe(3)
+    const noToday = addToDay(addToDay({ days: {} }, at(1), { turns: 1 }), at(2), { turns: 1 })
+    expect(streak(noToday, now)).toBe(2)
+    expect(streak(addToDay({ days: {} }, at(3), { turns: 1 }), now)).toBe(0)
+    expect(lastDays(s, now, 3).map(d => d.day.turns)).toEqual([1, 1, 3])
+  })
+})
+
+describe('failures', () => {
+  test('each runner names its failing tests', () => {
+    expect(parseFailures(' FAIL  src/a.test.ts > login works 12ms\n FAIL  src/a.test.ts > login works')).toEqual(['src/a.test.ts > login works'])
+    expect(parseFailures('  ✕ adds numbers (3 ms)\n  ✓ subtracts')).toEqual(['adds numbers'])
+    expect(parseFailures('FAILED tests/test_a.py::test_login - assert 1 == 2')).toEqual(['tests/test_a.py::test_login'])
+    expect(parseFailures('test auth::login ... FAILED\ntest auth::other ... ok')).toEqual(['auth::login'])
+    expect(parseFailures('--- FAIL: TestLogin (0.00s)')).toEqual(['TestLogin'])
+    expect(parseFailures('(fail) login > rejects [0.12ms]')).toEqual(['login > rejects'])
+    expect(parseFailures('all good')).toEqual([])
+  })
+})
+
+describe('english', () => {
+  test('units and words follow the language', () => {
+    setLang('en')
+    try {
+      expect(duration(185_000)).toBe('3m 05s')
+      expect(compact(8_040_000)).toBe('2h14m')
+      expect(minutesLeft(90_000)).toBe('2m')
+    } finally {
+      setLang('ru')
+    }
+    expect(duration(185_000)).toBe('3м 05с')
   })
 })

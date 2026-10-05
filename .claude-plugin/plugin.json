@@ -1,9 +1,70 @@
 {
   "name": "tabby",
-  "version": "0.1.0",
-  "description": "A calm dashboard above the prompt: context and rate limits, git, tests, focus, a mini TODO and Tabby the cat",
+  "version": "0.2.0",
+  "description": "A calm dashboard above the prompt: context and rate limits with forecasts, git and PR checks, tests, focus, a mini TODO and Tabby the cat",
   "types": "./types/index.d.ts",
   "author": {
     "name": "alexskvo10"
+  },
+  "repository": "https://github.com/alexskvo10/claude-tab",
+  "license": "MIT",
+  "keywords": ["dashboard", "status", "rate-limits", "context", "pomodoro", "todo", "git"],
+  "userConfig": {
+    "language": {
+      "type": "string",
+      "title": "Language / Язык",
+      "description": "Interface language: ru or en",
+      "default": "ru",
+      "options": ["ru", "en"]
+    },
+    "theme": {
+      "type": "string",
+      "title": "Palette",
+      "description": "Colours for a dark or a light terminal",
+      "default": "dark",
+      "options": ["dark", "light"]
+    },
+    "pomodoroMinutes": {
+      "type": "number",
+      "title": "Pomodoro minutes",
+      "description": "Length of a focus session started from the pane or /focus without minutes",
+      "default": 25
+    },
+    "warnContext": {
+      "type": "number",
+      "title": "Context warning, %",
+      "description": "Warn once the context window is this full",
+      "default": 80
+    },
+    "warnLimit": {
+      "type": "number",
+      "title": "Rate-limit warning, %",
+      "description": "Warn once a 5h or 7d limit is this used",
+      "default": 80
+    },
+    "autoTests": {
+      "type": "boolean",
+      "title": "Run tests after Claude edits",
+      "description": "After a turn that edited files and ran no tests, run the project's tests",
+      "default": false
+    },
+    "sound": {
+      "type": "boolean",
+      "title": "Sound",
+      "description": "A soft chime when a long turn or a pomodoro ends",
+      "default": true
+    },
+    "quiet": {
+      "type": "boolean",
+      "title": "Quiet mode",
+      "description": "Only critical toasts: limits, context, failing tests, pomodoro",
+      "default": false
+    },
+    "showCost": {
+      "type": "boolean",
+      "title": "Show cost",
+      "description": "Show the session cost in the band and the pane",
+      "default": true
+    }
   }
 }

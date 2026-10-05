@@ -86,6 +86,26 @@ export function parseSummary(raw: string): TestSummary {
   return {}
 }
 
+/** Names of the failing tests, as each runner prints them; at most `max`. */
+export function parseFailures(raw: string, max = 20): string[] {
+  const text = stripAnsi(raw)
+  const found: string[] = []
+  const add = (name: string | undefined) => {
+    const clean = name?.trim().replace(/\s+/g, ' ')
+    if (clean && !found.includes(clean)) found.push(clean)
+  }
+  const patterns = [
+    /^\s*(?:FAIL|×|✗)\s+(\S+\.\w+\s+>\s+.+?)(?:\s+\d+ms)?$/gm, // vitest
+    /^\s+[✕×]\s+(.+?)(?:\s+\(\d+\s*ms\))?$/gm, // jest
+    /^FAILED\s+(\S+::\S+)/gm, // pytest
+    /^test\s+(\S+)\s+\.\.\.\s+FAILED$/gm, // cargo
+    /^\s*--- FAIL:\s+(\S+)/gm, // go
+    /^\s*\(fail\)\s+(.+?)(?:\s+\[[\d.]+ms\])?$/gm, // bun
+  ]
+  for (const re of patterns) for (const m of text.matchAll(re)) add(m[1])
+  return found.slice(0, max)
+}
+
 /** The last lines of output, for the pane. */
 export function tail(raw: string, lines: number): string {
   const all = stripAnsi(raw).replace(/\s+$/, '').split('\n')

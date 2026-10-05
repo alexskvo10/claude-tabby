@@ -1,176 +1,31 @@
-import type { On } from 'claude-code'
-import { describe, expect, mock, test } from 'claude-code/testing'
-import type { Engine } from 'claude-code/testing'
+import { describe, expect, test } from 'claude-code/testing'
 
 import { lines } from './text'
-
-const STATUS = [
-  '# branch.oid 0123456789abcdef',
-  '# branch.head feature/band',
-  '# branch.upstream origin/feature/band',
-  '# branch.ab +1 -0',
-  '1 .M N... 100644 100644 100644 aaa bbb hooks/register.tsx',
-  '? notes.md',
-].join('\n')
-
-const LOG = 'd7cb9a4\x1f1759600000\x1fInitial commit'
-const NOW = Date.parse('2026-10-05T12:00:00Z')
-const RED = 'Test Files  1 failed | 3 passed (4)\n      Tests  2 failed | 40 passed (42)'
-const GREEN = '      Tests  42 passed (42)'
-
-type Usage = { percent: number; fiveHour: number }
-
-type World = {
-  toasts: string[]
-  opened: string[]
-  ran: string[][]
-  tests: { exitCode: number; stdout: string }
-  usage: Usage
-  context: string[][]
-  store: Map<string, unknown>
-  clock: ReturnType<typeof mock.clock>
-}
-
-function done(exitCode: number, stdout: string) {
-  return { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false }
-}
-
-/** Everything beneath the plugin: a repo, a session with usage, a host. */
-function world(on: On, files: Record<string, string> = { '/repo/package.json': '{"scripts":{"test":"vitest run"}}' }): World {
-  const clock = mock.clock(on, { now: NOW })
-  const w: World = {
-    toasts: [],
-    opened: [],
-    ran: [],
-    tests: { exitCode: 1, stdout: RED },
-    usage: { percent: 48, fiveHour: 23 },
-    context: [],
-    store: new Map(),
-    clock,
-  }
-  on('store.get', ($, e) => ({ value: w.store.get(e.key) }))
-  on('store.set', ($, e) => {
-    w.store.set(e.key, JSON.parse(JSON.stringify(e.value)))
-    return { value: undefined }
-  })
-  on('session.start', () => ({ cwd: '/repo' }))
-  on('session.root', () => ({ value: '/repo' }))
-  on('session.repo', () => ({
-    value: { root: '/repo', remote: 'git@github.com:alexskvo10/claude-tab.git', internal: false, name: null },
-  }))
-  on('session.usage', () => ({
-    value: {
-      startedAt: NOW - 72 * 60_000,
-      context: { tokens: w.usage.percent * 2000, window: 200_000, percent: w.usage.percent },
-      rateLimits: [
-        { kind: 'five_hour', percentUsed: w.usage.fiveHour, resetsAt: '2026-10-05T14:14:00Z' },
-        { kind: 'seven_day', percentUsed: 41, resetsAt: '2026-10-08T16:00:00Z' },
-      ],
-      cost: { usd: 1.24 },
-    },
-  }))
-  on('process.run', ($, e) => {
-    w.ran.push([...e.argv])
-    if (e.argv[0] === 'git' && e.argv[1] === 'status') return { value: done(0, STATUS) }
-    if (e.argv[0] === 'git' && e.argv[1] === 'log') return { value: done(0, LOG) }
-    if (e.argv[0] === 'sh') return { value: done(w.tests.exitCode, w.tests.stdout) }
-    return { value: done(1, '') }
-  })
-  on('fs.exists', ($, e) => ({ value: e.path in files }))
-  on('fs.read', ($, e) => ({ value: files[e.path] ?? '' }))
-  on('command.register', ($, e) => ({ value: { command: e.name } }))
-  on('tool.register', ($, e) => ({ value: { tool: `mcp__tabby__${e.name}` } }))
-  on('ui.toast', ($, e) => {
-    w.toasts.push(e.text)
-    return { value: undefined }
-  })
-  on('ui.log', () => ({ value: undefined }))
-  on('ui.open', ($, e) => {
-    w.opened.push(e.id)
-    return { value: { isPlaced: true } }
-  })
-  on('turn.start', ($, e) => ({ turnId: e.turnId }))
-  on('turn.complete', ($, e) => ({ text: e.answer }))
-  on('prompt.submit', ($, e) => {
-    w.context.push([...(e.context ?? [])])
-    return { text: e.text, context: e.context }
-  })
-  on('tool.call', ($, e) => {
-    if (e.tool === 'Bash' && /test/.test(String(e.command))) {
-      return w.tests.exitCode === 0
-        ? { result: { stdout: w.tests.stdout }, text: w.tests.stdout }
-        : { isError: true as const, result: w.tests.stdout, text: w.tests.stdout }
-    }
-    return { result: 'ok', text: 'ok' }
-  })
-  return w
-}
-
-async function boot($: Engine, w: World): Promise<void> {
-  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
-  await w.clock.settle()
-}
-
-const ORIGIN = { kind: 'composer' } as const
-const PRESENTATION = { isFullscreen: true, columns: 140 } as never
-
-async function command($: Engine, w: World, name: string, args = ''): Promise<string> {
-  const ran = await $.command.run({ command: name, args, origin: ORIGIN, presentation: PRESENTATION })
-  await w.clock.settle()
-  return ran.text ?? ''
-}
-
-async function turn($: Engine, w: World, ms: number, tools: number): Promise<void> {
-  await $.turn.start({ text: 'go', turnId: `t${ms}` })
-  for (let i = 0; i < tools; i += 1) await $.tool.call({ tool: 'Read', file_path: '/repo/a.ts' } as never)
-  await w.clock.advance(ms)
-  await $.turn.complete({
-    answer: 'done',
-    durationMs: ms,
-    isAborted: false,
-    turnId: `t${ms}`,
-    reason: 'answer',
-    usage: { input_tokens: 1200, output_tokens: 800, cache_read_input_tokens: 40_000, cache_creation_input_tokens: 0, model: 'm' },
-  } as never)
-  await w.clock.settle()
-}
-
-const BAND = (bodyColumns: number, isWorking = false) => ({
-  plugin: 'tabby',
-  component: 'AbovePrompt' as const,
-  props: { hasSurvey: false, isWorking, maxRows: 10, bodyColumns, scroll: { offset: 0, bodyRows: 9 }, view: {} },
-})
-
-async function band($: Engine, cols: number, surface: 'terminal' | 'desktop' = 'terminal'): Promise<string[]> {
-  const ui = await $.ui.mount({ surface, ...BAND(cols) })
-  const drawn = lines((await ui.drawn()) as never)
-  await ui.unmount()
-  return drawn
-}
-
-const PANE = (bodyColumns: number) => ({
-  plugin: 'tabby',
-  component: 'Pane' as const,
-  requestId: 'tabby',
-  props: { title: 'Tabby', isFocused: true, bodyColumns, placement: 'dock', scroll: { offset: 0, bodyRows: 40 } } as never,
-})
+import { BAND, band, boot, command, GREEN, NOW, PANE, pane, RED, submit, turn, world } from './world'
 
 describe('band', () => {
   test('draws the session row and the work row on both surfaces', async ($, on) => {
     const w = world(on)
     await boot($, w)
     for (const surface of ['terminal', 'desktop'] as const) {
-      const [session, work] = await band($, 140, surface)
+      const [session, work, intro] = await band($, 140, surface)
       expect(session).toMatch(/\(=\^･ω･\^=\)\s+ctx ▰+▱+ 48%\s+96k\/200k\s+5ч ▰+▱+ 23%\s+↻2ч14м\s+7д ▰+▱+ 41%\s+↻3д4ч\s+\$1\.24/)
       expect(session).toEndWith('≡')
       expect(work).toBe('⎇ feature/band ↑1 ✚2')
+      expect(intro).toMatch(/^Tabby: ≡ или \/tab — панель/)
     }
+  })
+
+  test('the intro hint shows in the first three sessions only', async ($, on) => {
+    const w = world(on, { store: { prefs: { isCompact: false, tab: 'overview', isPetShown: true, introSeen: 3 } } })
+    await boot($, w)
+    expect(await band($, 140)).toHaveLength(2)
   })
 
   test('never draws wider than its box, and keeps the essentials when narrow', async ($, on) => {
     const w = world(on)
     await boot($, w)
-    await command($, w, 'todo', 'Очень длинная задача, которая точно не поместится в узкую плашку')
+    await command($, w, 'todo', '!Очень длинная задача, которая точно не поместится в узкую плашку')
     await command($, w, 'focus', 'Длинная цель фокуса для проверки обрезки 25')
     await turn($, w, 34_000, 3)
     for (const cols of [30, 40, 50, 64, 80, 96, 120, 160, 220]) {
@@ -181,7 +36,7 @@ describe('band', () => {
     }
   })
 
-  test('shows a live turn with its clock and tool count', async ($, on) => {
+  test('shows a live turn with its clock, tool count and last tool', async ($, on) => {
     const w = world(on)
     await boot($, w)
     await $.turn.start({ text: 'go', turnId: 'live' })
@@ -190,7 +45,36 @@ describe('band', () => {
     await w.clock.advance(12_000)
     const [session, work] = await band($, 140)
     expect(session).toMatch(/^\(=•ω•=\)/)
-    expect(work).toMatch(/^[●◉○] 12с · 2 инстр/)
+    expect(work).toMatch(/^[●◉○] 12с · 2 инстр · Grep/)
+  })
+
+  test('every block has a card with its details', async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    const ui = await $.ui.mount({ surface: 'terminal', ...BAND(140) })
+    expect(await ui.find({ type: 'Text', text: /Контекст: 96k из 200k токенов \(48%\)/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /Лимит 5ч: 23%/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /сброс в \d+:14 \(через 2ч 14м\)/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /2 изменённых файла/ })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('labels are buttons: they open their tab or act', async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    await command($, w, 'test')
+    const ui = await $.ui.mount({ surface: 'terminal', ...BAND(140) })
+    await ui.press({ key: 'work-git-1' })
+    await w.clock.settle()
+    expect(w.opened).toEqual(['tabby'])
+    expect(w.store.get('prefs')).toMatchObject({ tab: 'git' })
+    await ui.press({ key: 'work-tests-1' })
+    await w.clock.settle()
+    expect(w.prompt.text).toBe('Почини упавшие тесты:\n- src/auth.test.ts > login rejects bad password\n- src/auth.test.ts > token expires')
+    await ui.press({ key: 'open' })
+    await w.clock.settle()
+    expect(w.opened).toHaveLength(2)
+    await ui.unmount()
   })
 
   test('compact mode is one row, and the cat can be hidden', async ($, on) => {
@@ -203,33 +87,103 @@ describe('band', () => {
     await command($, w, 'tab', 'hide-pet')
     expect((await band($, 120))[0]).toStartWith('ctx')
   })
-
-  test('the ≡ button opens the pane', async ($, on) => {
-    const w = world(on)
-    await boot($, w)
-    const ui = await $.ui.mount({ surface: 'terminal', ...BAND(120) })
-    await ui.press({ key: 'open' })
-    await w.clock.settle()
-    expect(w.opened).toEqual(['tabby'])
-    await ui.unmount()
-  })
 })
 
-describe('usage alerts', () => {
+describe('forecasts', () => {
+  test('the context shows how many turns it has left', async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    for (const pct of [40, 46, 52, 58]) {
+      w.usage.percent = pct
+      await turn($, w, 20_000, 1)
+    }
+    // 12k tokens a turn, 116k used of 200k: 7 turns
+    expect((await band($, 140))[0]).toMatch(/58%\s+≈7 ходов/)
+    expect(await pane($, w, 'overview')).toMatch(/\+12k\/ход · ≈7 ходов/)
+  })
+
+  test('a limit burning faster than its window warns before it runs out', async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    for (let i = 1; i <= 8; i += 1) {
+      w.usage.fiveHour = 23 + i * 4
+      await w.clock.advance(150_000)
+    }
+    // 32 points in 20 minutes: 96%/h, 45% left, about 28 minutes, before the 2h reset
+    const [session] = await band($, 160)
+    expect(session).toMatch(/5ч ▰+▱+ 55%\s+⚠ хватит на 2\dм/)
+    expect(w.toasts.some(t => /При таком темпе лимит 5ч кончится через/.test(t))).toBe(true)
+    const overview = await pane($, w, 'overview')
+    expect(overview).toMatch(/⚠ лимит 5ч кончится раньше сброса/)
+    expect(overview).toMatch(/⚠ кончится через 2\dм/)
+  })
+
   test('warn once as context and limits fill up', async ($, on) => {
     const w = world(on)
     await boot($, w)
-    expect(w.toasts).toEqual([])
     w.usage = { percent: 91, fiveHour: 82 }
     await w.clock.advance(30_000)
-    expect(w.toasts.some(t => /Контекст заполнен на 90%/.test(t))).toBe(true)
+    expect(w.toasts.filter(t => /Контекст заполнен на 90%/.test(t))).toHaveLength(1)
+    expect(w.toasts.filter(t => /Контекст заполнен на 80%/.test(t))).toHaveLength(0)
     expect(w.toasts.some(t => /Лимит 5ч израсходован на 82%/.test(t))).toBe(true)
-    expect(w.toasts.some(t => /Бездонная память/.test(t))).toBe(true)
     const count = w.toasts.length
-    await w.clock.advance(30_000)
-    await w.clock.advance(30_000)
+    await w.clock.advance(60_000)
     expect(w.toasts.length).toBe(count)
     expect((await band($, 140))[0]).toMatch(/⚠ \/compact/)
+  })
+})
+
+describe('git', () => {
+  test('shows the PR and its checks; all green earns Ship it', async ($, on) => {
+    const w = world(on)
+    w.pr = JSON.stringify({
+      number: 12,
+      title: 'Add the band',
+      url: 'https://github.com/alexskvo10/claude-tab/pull/12',
+      state: 'OPEN',
+      isDraft: false,
+      statusCheckRollup: [{ status: 'COMPLETED', conclusion: 'SUCCESS' }, { state: 'SUCCESS' }],
+    })
+    await boot($, w)
+    expect((await band($, 140))[1]).toMatch(/⎇ feature\/band ↑1 ✚2 #12 ✓/)
+    const git = await pane($, w, 'git')
+    expect(git).toMatch(/#12 Add the band/)
+    expect(git).toMatch(/✓ проверки: 2 ✓ · 0 ✗ · 0 ⋯/)
+    expect(w.toasts.some(t => /Ship it/.test(t))).toBe(true)
+  })
+
+  test('commits from the pane, and stash asks twice', async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    await command($, w, 'tab', 'git')
+    const ui = await $.ui.mount({ surface: 'terminal', ...PANE(60) })
+    await ui.press({ key: 'git-stash' })
+    await w.clock.settle()
+    expect(lines((await ui.drawn()) as never).join('\n')).toMatch(/\[ Точно\? Нажмите ещё раз \]/)
+    expect(w.ran.some(a => a[1] === 'stash' && a[2] === 'push')).toBe(false)
+    await ui.press({ key: 'git-stash' })
+    await w.clock.settle()
+    expect(w.ran.find(a => a[1] === 'stash' && a[2] === 'push')).toBeDefined()
+
+    await ui.input({ key: 'git-commit', text: 'Add band' })
+    await w.clock.settle()
+    expect(w.ran.find(a => a[1] === 'commit')).toEqual(['git', 'commit', '-m', 'Add band'])
+    expect(w.toasts).toContain('Закоммичено: Add band')
+    expect(w.toasts.some(t => /Коммитер/.test(t))).toBe(true)
+    await ui.unmount()
+  })
+
+  test('a stash press not repeated in time disarms itself', async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    await command($, w, 'tab', 'git')
+    const ui = await $.ui.mount({ surface: 'terminal', ...PANE(60) })
+    await ui.press({ key: 'git-stash' })
+    await w.clock.advance(6000)
+    await ui.press({ key: 'git-stash' })
+    await w.clock.settle()
+    expect(w.ran.some(a => a[1] === 'stash' && a[2] === 'push')).toBe(false)
+    await ui.unmount()
   })
 })
 
@@ -238,66 +192,79 @@ describe('tasks', () => {
     const w = world(on)
     await boot($, w)
     expect(await command($, w, 'todo', 'Починить логин')).toBe('☐ #1 Починить логин')
-    expect(await command($, w, 'todo', 'Написать тесты')).toBe('☐ #2 Написать тесты')
-    expect((await band($, 140))[1]).toMatch(/☐ 0\/2  Починить логин/)
+    expect(await command($, w, 'todo', '!Написать тесты')).toBe('☐ #2 ! Написать тесты')
+    expect(await command($, w, 'todo', '* Обновить резюме')).toBe('☐ #3 Обновить резюме ◆')
+    // the important one leads in the band
+    expect((await band($, 140))[1]).toMatch(/☐ 0\/3  ! Написать тесты/)
 
-    const added = await $.tool.call({ tool: 'mcp__tabby__todo', action: 'add', text: 'Обновить README' } as never)
-    expect(String(added.result)).toMatch(/Added #3/)
+    const added = await $.tool.call({ tool: 'mcp__tabby__todo', action: 'add', text: 'README', important: true } as never)
+    expect(String(added.result)).toMatch(/Added #4/)
     const ticked = await $.tool.call({ tool: 'mcp__tabby__todo', action: 'done', id: 1 } as never)
     expect(String(ticked.result)).toMatch(/\[x\] #1 Починить логин/)
-    const missing = await $.tool.call({ tool: 'mcp__tabby__todo', action: 'done', id: 42 } as never)
-    expect(String(missing.result)).toMatch(/No item #42/)
+    expect(String((await $.tool.call({ tool: 'mcp__tabby__todo', action: 'done', id: 42 } as never)).result)).toMatch(/No item #42/)
 
     await command($, w, 'tab', 'tasks')
     const ui = await $.ui.mount({ surface: 'terminal', ...PANE(60) })
     await ui.press({ key: 'todo-2' })
-    await w.clock.settle()
-    let drawn = lines((await ui.drawn()) as never).join('\n')
-    expect(drawn).toMatch(/☑ Починить логин/)
-    expect(drawn).toMatch(/☑ Написать тесты/)
-    expect(drawn).toMatch(/☐ Обновить README ✦/)
     await ui.input({ key: 'todo-new', text: 'Из панели' })
+    let drawn = lines((await ui.drawn()) as never).join('\n')
+    expect(drawn).toMatch(/! ☐ README ✦\n☐ Обновить резюме ◆\n☐ Из панели\n☑ Починить логин\n☑ Написать тесты/)
     await ui.press({ key: 'todo-clear' })
-    await w.clock.settle()
     drawn = lines((await ui.drawn()) as never).join('\n')
     expect(drawn).not.toMatch(/Починить логин/)
-    expect(drawn).toMatch(/☐ Из панели/)
     await ui.unmount()
 
+    expect(w.store.get('todos:*')).toEqual([{ id: 3, text: 'Обновить резюме', done: false, by: 'user', isGlobal: true }])
     expect(w.store.get('todos:/repo')).toEqual([
-      { id: 3, text: 'Обновить README', done: false, by: 'claude' },
-      { id: 4, text: 'Из панели', done: false, by: 'user' },
+      { id: 4, text: 'README', done: false, by: 'claude', isHigh: true },
+      { id: 5, text: 'Из панели', done: false, by: 'user' },
     ])
-    expect(await command($, w, 'todo', 'rm 3')).toBe('Задача #3 удалена.')
+    expect(await command($, w, 'todo', 'rm 4')).toBe('Задача #4 удалена.')
     expect(await command($, w, 'todo', 'done 99')).toBe('Нет задачи #99.')
+  })
+
+  test('Claude’s plan shows in the band and the tab, and leaves when done', async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    const todos = (s: string[]) =>
+      ['Read the code', 'Write the fix', 'Run the tests'].map((content, i) => ({ content, activeForm: `${content.replace(/^(\w+)/, '$1ing')}`, status: s[i] }))
+    await $.turn.start({ text: 'go', turnId: 'p' })
+    await $.tool.call({ tool: 'TodoWrite', todos: todos(['completed', 'in_progress', 'pending']) } as never)
+    expect((await band($, 160))[1]).toMatch(/▸ план 1\/3 Writeing the fix/)
+    expect(await pane($, w, 'tasks')).toMatch(/ПЛАН CLAUDE  1\/3\n✓ Read the code\n▸ Writeing the fix\n○ Run the tests/)
+    await $.tool.call({ tool: 'TodoWrite', todos: todos(['completed', 'completed', 'completed']) } as never)
+    await $.turn.complete({ answer: '', durationMs: 1000, isAborted: false, turnId: 'p', reason: 'answer' } as never)
+    expect((await band($, 160))[1]).not.toMatch(/план/)
   })
 
   test('Claude hears about the focus and the list only when they change', async ($, on) => {
     const w = world(on)
     await boot($, w)
-    await $.prompt.submit({ text: 'hi', wait: false, origin: ORIGIN })
-    await command($, w, 'todo', 'Починить логин')
+    await submit($, 'hi')
+    await command($, w, 'todo', '!Починить логин')
     await command($, w, 'focus', 'Авторизация')
-    await $.prompt.submit({ text: 'go', wait: false, origin: ORIGIN })
-    await $.prompt.submit({ text: 'more', wait: false, origin: ORIGIN })
+    await submit($, 'go')
+    await submit($, 'more')
     expect(w.context[0]).toEqual([])
     expect(w.context[1]![0]).toMatch(/focus goal: "Авторизация"/)
-    expect(w.context[1]![0]).toMatch(/#1 Починить логин/)
+    expect(w.context[1]![0]).toMatch(/#1 \(important\) Починить логин/)
     expect(w.context[2]).toEqual([])
   })
 
-  test('a pomodoro counts down, ends with a toast and clears itself', async ($, on) => {
+  test('a pomodoro counts down, chimes, counts toward today and clears itself', async ($, on) => {
     const w = world(on)
     await boot($, w)
     expect(await command($, w, 'focus', 'Плашка над вводом 25')).toBe('◎ Фокус: «Плашка над вводом» · 25 мин.')
     await w.clock.advance(10 * 60_000)
     expect((await band($, 140))[1]).toMatch(/◎ Плашка над вводом 15м/)
+    expect(await pane($, w, 'tasks')).toMatch(/осталось 15:00 из 25 мин/)
     await w.clock.advance(15 * 60_000)
     expect(w.toasts.some(t => /25 мин фокуса позади/.test(t))).toBe(true)
-    expect(w.toasts.some(t => /В потоке/.test(t))).toBe(true)
+    expect(w.sounds).toEqual(['assets/chime.wav'])
     expect((await band($, 140))[1]).toMatch(/перерыв/)
     await w.clock.advance(11 * 60_000)
     expect((await band($, 140))[1]).not.toMatch(/◎/)
+    expect(await pane($, w, 'overview')).toMatch(/0 ходов · фокус 25м/)
   })
 
   test('/focus parses goals, timers and stop', async ($, on) => {
@@ -311,7 +278,7 @@ describe('tasks', () => {
 })
 
 describe('tests', () => {
-  test('/test runs the detected command and shows the result; a fix earns a comeback', async ($, on) => {
+  test('/test shows the result and the failing tests; a click asks Claude to fix one', async ($, on) => {
     const w = world(on)
     await boot($, w)
     expect(await command($, w, 'test')).toBe('Запускаю: npm test — результат появится в плашке.')
@@ -319,11 +286,20 @@ describe('tests', () => {
     expect((await band($, 140))[1]).toMatch(/✗ 2 упало/)
     expect(w.toasts).toContain('✗ Упало тестов: 2')
 
+    await command($, w, 'tab', 'tests')
+    const ui = await $.ui.mount({ surface: 'terminal', ...PANE(70) })
+    const drawn = lines((await ui.drawn()) as never).join('\n')
+    expect(drawn).toMatch(/УПАВШИЕ ТЕСТЫ  2\n✗ src\/auth\.test\.ts > login rejects bad password\n✗ src\/auth\.test\.ts > token expires/)
+    w.prompt.text = 'draft'
+    await ui.press({ key: 'fail-1' })
+    expect(w.prompt.text).toBe('draft\nПочини упавший тест: src/auth.test.ts > token expires')
+    await ui.unmount()
+
     w.tests = { exitCode: 0, stdout: GREEN }
     await command($, w, 'test')
     expect((await band($, 140))[1]).toMatch(/✓ 42\/42/)
     expect(w.toasts.some(t => /Камбэк/.test(t))).toBe(true)
-    expect(w.toasts.some(t => /снова зелёные/.test(t))).toBe(true)
+    expect(await pane($, w, 'tests')).toMatch(/ИСТОРИЯ\n●●/)
   })
 
   test('tests Claude runs through Bash show up too', async ($, on) => {
@@ -337,8 +313,18 @@ describe('tests', () => {
     expect((await band($, 140))[1]).toMatch(/✓ 42\/42/)
   })
 
+  test('with autoTests on, a turn that edited files runs the tests', { options: { autoTests: true } }, async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    await turn($, w, 5_000, 2, 'Read')
+    expect(w.ran.some(a => a[0] === 'sh')).toBe(false)
+    await turn($, w, 5_000, 2, 'Edit')
+    expect(w.ran.filter(a => a[0] === 'sh')).toHaveLength(1)
+    expect(await pane($, w, 'tests')).toMatch(/автопрогон/)
+  })
+
   test('no command found asks for one; a custom one is remembered', async ($, on) => {
-    const w = world(on, {})
+    const w = world(on, { files: {} })
     await boot($, w)
     expect(await command($, w, 'test')).toMatch(/Задайте команду/)
     w.tests = { exitCode: 0, stdout: GREEN }
@@ -349,33 +335,33 @@ describe('tests', () => {
 })
 
 describe('pane', () => {
-  test('every tab draws on every surface', async ($, on) => {
+  test('every tab draws on every surface, with badges on the tabs', async ($, on) => {
     const w = world(on)
     await boot($, w)
     await command($, w, 'todo', 'Задача')
     await command($, w, 'test')
     await turn($, w, 20_000, 2)
     for (const tab of ['overview', 'git', 'tasks', 'tests', 'pet']) {
-      await command($, w, 'tab', tab)
       for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const) {
-        const ui = await $.ui.mount({ surface, ...PANE(56) })
-        const drawn = lines((await ui.drawn()) as never)
-        expect(drawn[0], `${tab} ${surface}`).toMatch(/1: Обзор\s+2: Git\s+3: Задачи\s+4: Тесты\s+5: Таби/)
-        await ui.unmount()
+        const drawn = (await pane($, w, tab, 56, surface)).split('\n')
+        expect(drawn[0], `${tab} ${surface}`).toMatch(/1: Обзор\s+2: Git ✚2\s+3: Задачи 1\s+4: Тесты ✗\s+5: Таби/)
+        expect(drawn.at(-1)!.length, `${tab} ${surface}: the key hint`).toBeGreaterThan(10)
       }
     }
   })
 
-  test('tabs switch by their keys and the pane reads what happened', async ($, on) => {
+  test('tabs switch by their keys and read what happened', async ($, on) => {
     const w = world(on)
     await boot($, w)
     await turn($, w, 34_000, 3)
     await command($, w, 'tab')
     const ui = await $.ui.mount({ surface: 'terminal', ...PANE(60) })
     let drawn = lines((await ui.drawn()) as never).join('\n')
-    expect(drawn).toMatch(/КОНТЕКСТ/)
+    expect(drawn).toMatch(/✓ всё спокойно/)
     expect(drawn).toMatch(/96k из 200k токенов/)
     expect(drawn).toMatch(/1 ход · 3 инстр · \$1\.24/)
+    expect(drawn).toMatch(/СЕГОДНЯ\n1 ход\n/)
+    expect(drawn).toMatch(/последний: 34с · 3 инстр · 42k ток/)
     await ui.press({ key: 'tab-git' })
     drawn = lines((await ui.drawn()) as never).join('\n')
     expect(drawn).toMatch(/alexskvo10\/claude-tab/)
@@ -387,6 +373,18 @@ describe('pane', () => {
     expect(drawn).toMatch(/★ Первый шаг/)
     await ui.unmount()
   })
+
+  test('a terminal that draws pictures gets the pixel cat', async ($, on) => {
+    const w = world(on, { env: { TERM: 'xterm-kitty', KITTY_WINDOW_ID: '1' } })
+    await boot($, w)
+    await command($, w, 'tab', 'pet')
+    const ui = await $.ui.mount({ surface: 'terminal', ...PANE(60) })
+    expect(await ui.find({ type: 'Image', key: 'cat' })).toBeDefined()
+    await ui.unmount()
+    const desktop = await $.ui.mount({ surface: 'desktop', ...PANE(60) })
+    expect(await desktop.find({ type: 'Image' })).toBeUndefined()
+    await desktop.unmount()
+  })
 })
 
 describe('Tabby', () => {
@@ -396,8 +394,72 @@ describe('Tabby', () => {
     await turn($, w, 5_000, 1)
     expect(w.toasts.some(t => /Первый шаг/.test(t))).toBe(true)
     expect(w.toasts.some(t => /Молния/.test(t))).toBe(true)
-    const pet = (w.store.get('pet')) as { xp: number; achievements: string[] }
+    const pet = w.store.get('pet') as { xp: number; achievements: string[] }
     expect(pet.achievements).toEqual(['first', 'lightning'])
     expect(pet.xp).toBe(2 + 15 + 15)
+  })
+
+  test('days in a row make a streak', async ($, on) => {
+    const day = (offset: number) => {
+      const d = new Date(NOW)
+      d.setDate(d.getDate() - offset)
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    }
+    const days = Object.fromEntries([1, 2].map(i => [day(i), { turns: 3, tools: 5, focusMs: 0, costUsd: 0.5 }]))
+    const w = world(on, { store: { stats: { days } } })
+    await boot($, w)
+    await turn($, w, 20_000, 1)
+    expect(w.toasts.some(t => /Привычка/.test(t))).toBe(true)
+    expect(await pane($, w, 'overview')).toMatch(/СЕГОДНЯ  серия 3 дня/)
+    expect(await pane($, w, 'pet')).toMatch(/серия: 3 дня подряд/)
+  })
+})
+
+describe('windows', () => {
+  test('tests run through cmd.exe there', async ($, on) => {
+    const w = world(on, { env: { OS: 'Windows_NT' } })
+    await boot($, w)
+    await command($, w, 'test')
+    expect(w.ran.find(a => a[0] === 'cmd.exe')).toEqual(['cmd.exe', '/d', '/s', '/c', 'npm test'])
+    expect(w.ran.some(a => a[0] === 'sh')).toBe(false)
+  })
+})
+
+describe('settings', () => {
+  test('English', { options: { language: 'en' } }, async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    const [session, work] = await band($, 140)
+    expect(session).toMatch(/ctx ▰+▱+ 48%.*5h ▰+▱+ 23%\s+↻2h14m\s+7d/)
+    expect(work).toBe('⎇ feature/band ↑1 ✚2')
+    expect(await pane($, w, 'overview')).toMatch(/1: Overview\s+2: Git ✚2\s+3: Tasks\s+4: Tests\s+5: Tabby[\s\S]*✓ all calm/)
+    expect(await command($, w, 'focus', 'ship it 30')).toBe('◎ Focus: "ship it" · 30 min.')
+  })
+
+  test('quiet mode keeps only the critical toasts; sound off stays silent', { options: { quiet: true, sound: false } }, async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    await turn($, w, 100_000, 1)
+    expect(w.toasts).toEqual([])
+    expect(w.sounds).toEqual([])
+    w.usage.percent = 92
+    await w.clock.advance(30_000)
+    expect(w.toasts).toEqual(['Контекст заполнен на 90% — самое время для /compact'])
+  })
+
+  test('cost can be hidden; the pomodoro length is configurable', { options: { showCost: false, pomodoroMinutes: 50 } }, async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    expect((await band($, 140))[0]).not.toMatch(/\$/)
+    expect(await command($, w, 'focus', 'долгая задача')).toBe('◎ Фокус: «долгая задача» · 50 мин.')
+  })
+
+  test('the light palette swaps the colours', { options: { theme: 'light' } }, async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    const ui = await $.ui.mount({ surface: 'terminal', ...BAND(140) })
+    const found = await ui.findAll({ type: 'Text', text: '▰▰▰▰▰' })
+    expect(found.some(f => f.props.color === '#2E7D32')).toBe(true)
+    await ui.unmount()
   })
 })

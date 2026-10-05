@@ -1,14 +1,7 @@
 // Pure formatting helpers: no `$`, so the tests exercise them directly.
+import { C, L } from './i18n'
 
-export const C = {
-  accent: '#D97757',
-  green: '#98C379',
-  yellow: '#E5C07B',
-  red: '#E06C75',
-  blue: '#61AFEF',
-  purple: '#C678DD',
-  cyan: '#56B6C2',
-} as const
+export { C }
 
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
@@ -27,6 +20,11 @@ export function truncate(text: string, max: number): string {
   return chars.slice(0, max - 1).join('') + '…'
 }
 
+export function pad(text: string, width: number): string {
+  const n = cells(text)
+  return n >= width ? truncate(text, width) : text + ' '.repeat(width - n)
+}
+
 export function tokens(n: number): string {
   if (n < 1000) return String(Math.round(n))
   if (n < 10_000) return `${(n / 1000).toFixed(1)}k`
@@ -34,54 +32,69 @@ export function tokens(n: number): string {
   return `${(n / 1_000_000).toFixed(n < 10_000_000 ? 1 : 0)}M`
 }
 
-/** A span of time, short: 9с, 42с, 3м 05с, 1ч 12м, 3д 4ч. */
+/** A span of time, short: 9с, 3м 05с, 1ч 12м, 3д 4ч. */
 export function duration(ms: number): string {
+  const { s, m, h, d } = L.u
   const safe = Math.max(0, ms)
-  if (safe < MINUTE) return `${Math.floor(safe / 1000)}с`
+  if (safe < MINUTE) return `${Math.floor(safe / 1000)}${s}`
   if (safe < HOUR) {
-    const m = Math.floor(safe / MINUTE)
-    const s = Math.floor((safe % MINUTE) / 1000)
-    return m < 10 ? `${m}м ${String(s).padStart(2, '0')}с` : `${m}м`
+    const mm = Math.floor(safe / MINUTE)
+    const ss = Math.floor((safe % MINUTE) / 1000)
+    return mm < 10 ? `${mm}${m} ${String(ss).padStart(2, '0')}${s}` : `${mm}${m}`
   }
   if (safe < DAY) {
-    const h = Math.floor(safe / HOUR)
-    const m = Math.floor((safe % HOUR) / MINUTE)
-    return m === 0 ? `${h}ч` : `${h}ч ${m}м`
+    const hh = Math.floor(safe / HOUR)
+    const mm = Math.floor((safe % HOUR) / MINUTE)
+    return mm === 0 ? `${hh}${h}` : `${hh}${h} ${mm}${m}`
   }
-  const d = Math.floor(safe / DAY)
-  const h = Math.floor((safe % DAY) / HOUR)
-  return h === 0 ? `${d}д` : `${d}д ${h}ч`
+  const dd = Math.floor(safe / DAY)
+  const hh = Math.floor((safe % DAY) / HOUR)
+  return hh === 0 ? `${dd}${d}` : `${dd}${d} ${hh}${h}`
 }
 
-/** The most compact span: 9с, 42с, 3м, 1ч12м, 3д4ч. */
+/** The most compact span: 9с, 3м, 1ч12м, 3д4ч. */
 export function compact(ms: number): string {
+  const { s, m, h, d } = L.u
   const safe = Math.max(0, ms)
-  if (safe < MINUTE) return `${Math.floor(safe / 1000)}с`
-  if (safe < HOUR) return `${Math.floor(safe / MINUTE)}м`
+  if (safe < MINUTE) return `${Math.floor(safe / 1000)}${s}`
+  if (safe < HOUR) return `${Math.floor(safe / MINUTE)}${m}`
   if (safe < DAY) {
-    const h = Math.floor(safe / HOUR)
-    const m = Math.floor((safe % HOUR) / MINUTE)
-    return m === 0 ? `${h}ч` : `${h}ч${m}м`
+    const hh = Math.floor(safe / HOUR)
+    const mm = Math.floor((safe % HOUR) / MINUTE)
+    return mm === 0 ? `${hh}${h}` : `${hh}${h}${mm}${m}`
   }
-  const d = Math.floor(safe / DAY)
-  const h = Math.floor((safe % DAY) / HOUR)
-  return h === 0 ? `${d}д` : `${d}д${h}ч`
+  const dd = Math.floor(safe / DAY)
+  const hh = Math.floor((safe % DAY) / HOUR)
+  return hh === 0 ? `${dd}${d}` : `${dd}${d}${hh}${h}`
+}
+
+/** Whole minutes left, rounded up so a countdown never reads 0 early. */
+export function minutesLeft(ms: number): string {
+  const mm = Math.ceil(Math.max(0, ms) / MINUTE)
+  return mm >= 60 ? compact(mm * MINUTE) : `${mm}${L.u.m}`
 }
 
 /** A minutes-and-seconds clock for a countdown: 24:59, 1:02:03. */
 export function clock(ms: number): string {
   const total = Math.max(0, Math.round(ms / 1000))
-  const h = Math.floor(total / 3600)
-  const m = Math.floor((total % 3600) / 60)
-  const s = total % 60
-  const ss = String(s).padStart(2, '0')
-  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`
+  const hh = Math.floor(total / 3600)
+  const mm = Math.floor((total % 3600) / 60)
+  const ss = String(total % 60).padStart(2, '0')
+  return hh > 0 ? `${hh}:${String(mm).padStart(2, '0')}:${ss}` : `${mm}:${ss}`
+}
+
+/** A wall-clock time of day, or a weekday and time when it is not today. */
+export function timeOfDay(at: number, now: number): string {
+  const d = new Date(at)
+  const hm = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
+  if (new Date(now).toDateString() === d.toDateString()) return hm
+  return `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')} ${hm}`
 }
 
 export function ago(at: number, now: number): string {
   const span = now - at
-  if (span < 45_000) return 'только что'
-  return `${compact(span)} назад`
+  if (span < 45_000) return L.justNow
+  return L.ago(compact(span))
 }
 
 /** Milliseconds until an ISO timestamp, or undefined when it does not parse. */
@@ -122,24 +135,15 @@ export function percent(n: number): string {
   return `${Math.round(n)}%`
 }
 
-/** Russian plural: plural(5, 'ход', 'хода', 'ходов'). */
 export function plural(n: number, one: string, few: string, many: string): string {
-  const abs = Math.abs(n) % 100
-  const last = abs % 10
-  if (abs > 10 && abs < 20) return many
-  if (last === 1) return one
-  if (last >= 2 && last <= 4) return few
-  return many
+  return L.plural(n, one, few, many)
 }
 
 export function limitLabel(kind: string): string {
-  if (kind === 'five_hour') return '5ч'
-  if (kind === 'seven_day') return '7д'
-  if (kind.startsWith('seven_day_')) return `7д ${kind.slice('seven_day_'.length)}`
-  if (kind === 'spend_limit') return '$'
-  return kind
+  return L.limit[kind] ?? (kind.startsWith('seven_day_') ? `${L.limit.seven_day} ${kind.slice(10)}` : kind)
 }
 
 export function money(usd: number): string {
+  if (usd < 0.995) return `${Math.round(usd * 100)}¢`
   return usd < 10 ? `$${usd.toFixed(2)}` : `$${usd.toFixed(1)}`
 }

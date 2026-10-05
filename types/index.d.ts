@@ -13,9 +13,21 @@ export type TabUsage = {
   startedAt: number
 }
 
+/** One reading of a rate limit, kept to see how fast it burns. */
+export type TabLimitSample = { at: number; kind: string; percent: number; resetsAt?: string }
+
 export type TabGitFile = { path: string; code: string }
 
 export type TabGitCommit = { hash: string; subject: string; at: number }
+
+export type TabPr = {
+  number: number
+  title: string
+  url: string
+  state: string
+  isDraft: boolean
+  checks: { passed: number; failed: number; pending: number }
+}
 
 export type TabGit = {
   branch: string
@@ -27,8 +39,10 @@ export type TabGit = {
   changed: number
   untracked: number
   conflicts: number
+  stashes: number
   files: TabGitFile[]
   commits: TabGitCommit[]
+  pr: TabPr | null
   at: number
 }
 
@@ -37,6 +51,9 @@ export type TabTurn = {
   tools: number
   errors: number
   tokens: number
+  /** the context fill once the turn ended, when known */
+  context?: number
+  costUsd?: number
   at: number
 }
 
@@ -50,7 +67,10 @@ export type TabLive = {
   startedAt: number
   tools: number
   errors: number
+  edits: number
+  ranTests: boolean
   lastTool: string
+  costAtStart?: number
 }
 
 export type TabTodo = {
@@ -58,9 +78,16 @@ export type TabTodo = {
   text: string
   done: boolean
   by: 'user' | 'claude'
+  isHigh?: boolean
+  isGlobal?: boolean
 }
 
+/** Claude's own plan, as its TodoWrite tool keeps it. */
+export type TabPlanItem = { text: string; active: string; status: 'pending' | 'in_progress' | 'completed' }
+
 export type TabTestStatus = 'none' | 'running' | 'pass' | 'fail'
+
+export type TabTestRun = { status: 'pass' | 'fail'; at: number; failed?: number }
 
 export type TabTests = {
   status: TabTestStatus
@@ -72,7 +99,9 @@ export type TabTests = {
   startedAt?: number
   at?: number
   tail: string
-  by: 'button' | 'claude' | null
+  failures: string[]
+  history: TabTestRun[]
+  by: 'button' | 'claude' | 'auto' | null
   previous: TabTestStatus
 }
 
@@ -92,26 +121,39 @@ export type TabPet = {
   totals: { turns: number; tools: number; todosDone: number }
 }
 
+export type TabDay = { turns: number; tools: number; focusMs: number; costUsd: number }
+
+export type TabStats = { days: Record<string, TabDay> }
+
 export type TabId = 'overview' | 'git' | 'tasks' | 'tests' | 'pet'
 
 export type TabPrefs = {
   isCompact: boolean
   tab: TabId
   isPetShown: boolean
+  /** sessions the intro hint has shown in; it stops after a few */
+  introSeen: number
 }
+
+/** A two-step button waiting for its second press. */
+export type TabConfirm = { key: string; until: number } | null
 
 declare module 'claude-code' {
   interface PluginState {
-    'tabby': {
+    tabby: {
       usage: TabUsage | null
+      samples: TabLimitSample[]
       git: TabGit | null
       turns: TabTurns
       live: TabLive | null
       todos: TabTodo[]
+      plan: TabPlanItem[]
       tests: TabTests
       focus: TabFocus | null
       pet: TabPet
+      stats: TabStats
       prefs: TabPrefs
+      confirm: TabConfirm
       alerts: string[]
       tick: number
     }
