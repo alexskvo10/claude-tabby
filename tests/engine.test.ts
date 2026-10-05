@@ -9,7 +9,7 @@ describe('band', () => {
     await boot($, w)
     for (const surface of ['terminal', 'desktop'] as const) {
       const [session, work, intro] = await band($, 140, surface)
-      expect(session).toMatch(/\(=\^･ω･\^=\)\s+ctx ▰+▱+ 48%\s+96k\/200k\s+5ч ▰+▱+ 23%\s+↻2ч14м\s+7д ▰+▱+ 41%\s+↻3д4ч\s+\$1\.24/)
+      expect(session).toMatch(/\(=\^･ω･\^=\)\s+ctx ▰+▱+ 48%\s+96k\/200k\s+5ч ▰+▱+ 23%\s+↻ 2ч14м\s+7д ▰+▱+ 41%\s+↻ 3д4ч\s+\$1\.24/)
       expect(session).toEndWith('≡')
       expect(work).toBe('⎇ feature/band ↑1 ✚2')
       expect(intro).toMatch(/^Tabby: ≡ или \/tab — панель/)
@@ -461,7 +461,7 @@ describe('settings', () => {
     const w = world(on)
     await boot($, w)
     const [session, work] = await band($, 140)
-    expect(session).toMatch(/ctx ▰+▱+ 48%.*5h ▰+▱+ 23%\s+↻2h14m\s+7d/)
+    expect(session).toMatch(/ctx ▰+▱+ 48%.*5h ▰+▱+ 23%\s+↻ 2h14m\s+7d/)
     expect(work).toBe('⎇ feature/band ↑1 ✚2')
     expect(await pane($, w, 'overview')).toMatch(/1: Overview\s+2: Git ✚2\s+3: Tasks\s+4: Tests\s+5: Tabby[\s\S]*✓ all calm/)
     expect(await command($, w, 'focus', 'ship it 30')).toBe('◎ Focus: "ship it" · 30 min.')

@@ -170,7 +170,8 @@ export function limitSegs(
         card,
       })
     } else if (left !== undefined) {
-      segs.push({ id: `reset:${l.kind}`, rank: isPrimary ? 4 : 1, parts: [{ text: `↻${compact(left)}`, dim: true }], card })
+      // a space after the arrow: Windows Terminal's font draws it wider than a cell
+      segs.push({ id: `reset:${l.kind}`, rank: isPrimary ? 4 : 1, parts: [{ text: `↻ ${compact(left)}`, dim: true }], card })
     }
   })
   return segs
