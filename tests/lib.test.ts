@@ -9,7 +9,7 @@ import type { Seg } from '../hooks/lib/layout'
 import { setLang } from '../hooks/lib/i18n'
 import { level, mood } from '../hooks/lib/pet'
 import { base64, bigText, DEFAULT, pack, ring, sprite, squares, toCells } from '../hooks/lib/pixels'
-import { bigCat, smallCat } from '../hooks/lib/sprites'
+import { PALETTE, bigCat, smallCat } from '../hooks/lib/sprites'
 import { addToDay, dayKey, lastDays, streak } from '../hooks/lib/stats'
 import { detectCommand, isTestCommand, parseFailures, parseSummary, tail } from '../hooks/lib/tests'
 
@@ -308,10 +308,23 @@ describe('pixels', () => {
   })
 
   test('Tabby blinks now and then and types while working', () => {
-    expect(frameAt('happy', 100, 'small')).toBe(3)
+    expect(frameAt('happy', 100, 'small')).toBe(1)
     expect(frameAt('happy', 1000, 'small')).toBe(0)
+    expect(frameAt('happy', 100, 'big')).toBe(3)
     expect(frameAt('happy', 1000, 'big')).toBe(1)
     expect(new Set([0, 280, 560, 840].map(ms => frameAt('work', ms, 'small'))).size).toBe(4)
     expect(frameAt('focus', 12345, 'big')).toBe(0)
+  })
+
+  test('the purring and the working band cat differ at a glance', () => {
+    const at = (m: 'happy' | 'work', f: number) => Array.from(smallCat(m, f).px)
+    expect(at('happy', 0)).not.toEqual(at('work', 0))
+    // the laptop sits under the chin only while working
+    const lid = PALETTE.X
+    expect(at('work', 0)).toContain(lid)
+    expect(at('happy', 0)).not.toContain(lid)
+    // the heart is only in the purring frame that shows it
+    expect(at('happy', 1)).toContain(PALETTE.H)
+    expect(at('happy', 0)).not.toContain(PALETTE.H)
   })
 })

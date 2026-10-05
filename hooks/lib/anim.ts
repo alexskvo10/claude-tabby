@@ -6,10 +6,14 @@ import { frames } from './sprites'
 export function frameAt(mood: Mood, ms: number, size: 'small' | 'big'): number {
   const n = frames(mood, size)
   if (n <= 1) return 0
+  if (mood === 'happy' && size === 'small') {
+    // the smile stays; a heart pops up by the ear for 700 ms every 4.2 s
+    return ms % 4200 < 700 ? 1 : 0
+  }
   if (mood === 'happy') {
     // a blink of 160 ms every 4.2 s; between blinks the big cat wags its tail
     if (ms % 4200 < 160) return n - 1
-    return size === 'big' ? Math.floor(ms / 650) % 2 : 0
+    return Math.floor(ms / 650) % 2
   }
   if (mood === 'work') return Math.floor(ms / 280) % n
   if (mood === 'sleep') return Math.floor(ms / 900) % n

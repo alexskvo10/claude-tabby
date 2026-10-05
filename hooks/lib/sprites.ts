@@ -2,6 +2,7 @@
 //   O fur   D outline   L light belly   K eye   W eye shine   P nose/pink
 //   Z, z sleep   T tear   Y sparkle   S screen   G screen glow
 //   E darker fur (a shut eye)   B blush   R inner ear
+//   H heart   X laptop lid   N keyboard
 import type { Rgb, Sprite } from './pixels'
 import { rgb, sprite } from './pixels'
 
@@ -21,6 +22,9 @@ export const PALETTE: Record<string, Rgb> = {
   B: rgb('#F3A0A8'),
   R: rgb('#F4A3B5'),
   z: rgb('#7C8DB0'),
+  H: rgb('#FF6F91'),
+  X: rgb('#56607A'),
+  N: rgb('#2F3542'),
 }
 
 // ---------------------------------------------------------------- band: 11 x 6
@@ -59,11 +63,24 @@ const EYES_SHUT = 'EE'
 
 export type Mood = 'happy' | 'work' | 'sad' | 'sleep' | 'proud' | 'focus'
 
+// Purring: eyes shut in a smile, ^ ^, and now and then a heart by the ear.
+const SMILE = { 2: '..D...D....', 3: '.D.D.D.D...' }
+const HEART = { 0: '........H.H', 1: '.........H.' }
+
+// Working: a laptop under the chin, eyes reading along the lines, paws typing.
+const LAPTOP = '.XXXXGXXX..'
+const PAWS_A = '.LNNNNNL...'
+const PAWS_B = '.NLNNNLN...'
+
 const SMALL_FRAMES: Record<Mood, readonly (readonly string[])[]> = {
-  // frames before the last are open; the last is the blink
-  happy: [head(EYES_OPEN), head(EYES_OPEN), head(EYES_OPEN), head(EYES_SHUT)],
-  // eyes darting over the screen while Claude types
-  work: [head(EYES_OPEN), head(EYES_LEFT), head(EYES_OPEN), head(EYES_SHUT)],
+  // the anim shows the heart for a moment now and then
+  happy: [head('OO', SMILE), head('OO', { ...SMILE, ...HEART })],
+  work: [
+    head(EYES_OPEN, { 4: LAPTOP, 5: PAWS_A }),
+    head(EYES_OPEN, { 4: LAPTOP, 5: PAWS_B }),
+    head(EYES_LEFT, { 4: LAPTOP, 5: PAWS_A }),
+    head(EYES_LEFT, { 4: LAPTOP, 5: PAWS_B }),
+  ],
   sad: [head(EYES_OPEN, { 4: '.T....T....' }), head(EYES_OPEN, { 5: '.T....T....' })],
   sleep: [
     head(EYES_SHUT, { 0: '.........z.' }),
