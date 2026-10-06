@@ -367,10 +367,10 @@ export function CatSvg(el: El, key: string, m: Mood, size: 'small' | 'big', now:
   const steps = animate
     ? cycle(m, size).map(s => ({ sprite: draw(m, s.frame), ms: s.ms }))
     : [{ sprite: draw(m, frameAt(m, now, size)), ms: 1 }]
-  const isLoop = steps.length > 1
   const scale = 8
   const first = steps[0]!.sprite
-  // a frame given no size takes the browser's default one, far larger than the cat
+  // an image, not an interactive frame: the desktop paints such a frame white
+  // behind the cat; the loop is SMIL, which an SVG image plays as well
   return (
     <Svg
       key={key}
@@ -378,7 +378,6 @@ export function CatSvg(el: El, key: string, m: Mood, size: 'small' | 'big', now:
       alt={L.pet.moods[m]}
       width={first.w * scale}
       height={first.h * scale}
-      {...(isLoop ? { isInteractive: true } : {})}
     />
   )
 }

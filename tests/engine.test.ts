@@ -74,13 +74,12 @@ describe('band', () => {
         | { props: { source: string; alt: string; isInteractive?: boolean; width?: number; height?: number } }
         | undefined
       expect(cat, surface).toBeDefined()
-      // a frame with no size of its own grows far past the band's three rows
+      // its own size, as an image: an interactive frame is painted white on the desktop
       expect(cat!.props).toMatchObject({ width: 88, height: 48 })
-      expect(cat!.props.source).toContain('color-scheme')
       expect(cat!.props.alt).toBe('помогает')
       expect(cat!.props.source).toStartWith('<svg')
       expect(cat!.props.source).toContain('<animate')
-      expect(cat!.props.isInteractive).toBe(true)
+      expect(cat!.props.isInteractive).toBeUndefined()
       expect(cat!.props.source.length).toBeLessThan(131_072)
       await ui.unmount()
     }
