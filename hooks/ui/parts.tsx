@@ -20,7 +20,11 @@ import { burn, contextGrowth, turnsLeft } from '../lib/forecast'
 import { L } from '../lib/i18n'
 import type { Part, Seg } from '../lib/layout'
 import { SEPARATOR } from '../lib/layout'
+import { cycle, frameAt } from '../lib/anim'
+import type { Mood } from '../lib/pet'
 import { along, css, rgb } from '../lib/pixels'
+import { bigCat, smallCat } from '../lib/sprites'
+import { pixelSvg } from '../lib/svg'
 import type { Handlers } from '../snapshot'
 
 export type El = ElementTable
@@ -366,4 +370,19 @@ export function lastTurnSeg(last: TabTurn | undefined, count: number, on: Handle
   if (last.tools > 0) parts.push({ text: ` · ${last.tools} ${L.band.tools}`, dim: true })
   if (last.errors > 0) parts.push({ text: ` · ${last.errors} ${L.band.errors}`, color: C.red, dim: true })
   return { id: 'turn', group: 'turn', rank: 3, parts }
+}
+
+/**
+ * Tabby as SVG for the surfaces that draw no cells; the loop plays in the
+ * surface itself (SMIL), so it moves with no repaint. Null where SVG is not drawn.
+ */
+export function CatSvg(el: El, key: string, m: Mood, size: 'small' | 'big', now: number, animate: boolean): RenderElement | null {
+  const Svg = 'Svg' in el ? el.Svg : undefined
+  if (Svg === undefined) return null
+  const draw = size === 'small' ? smallCat : bigCat
+  const steps = animate
+    ? cycle(m, size).map(s => ({ sprite: draw(m, s.frame), ms: s.ms }))
+    : [{ sprite: draw(m, frameAt(m, now, size)), ms: 1 }]
+  const isLoop = steps.length > 1
+  return <Svg key={key} source={pixelSvg(steps, size === 'small' ? 9 : 8)} alt={L.pet.moods[m]} {...(isLoop ? { isInteractive: true } : {})} />
 }
