@@ -44,14 +44,30 @@ export function groups(segs: readonly Seg[]): Seg[][] {
   return out
 }
 
-/** Between groups of a row: a thin rule with room either side. */
-export const GROUP_GAP = ' │ '
+/** Between groups of a row: room, not a rule; the columns line them up. */
+export const GROUP_GAP = '   '
 
 /** A row's width as groups: one space inside a group, the rule between groups. */
 export function groupedWidth(segs: readonly Seg[]): number {
   const gs = groups(segs)
   if (gs.length === 0) return 0
   return gs.reduce((sum, g) => sum + g.reduce((s, x) => s + segWidth(x), 0) + (g.length - 1), 0) + GROUP_GAP.length * (gs.length - 1)
+}
+
+/**
+ * Column widths that line the rows' groups up: the n-th group of every row
+ * starts where the widest n-th group before it ends. A row the aligned layout
+ * would push past its `widths` entry gets null and keeps its natural layout.
+ */
+export function columns(rows: readonly (readonly Seg[])[], widths: readonly number[]): (number[] | null)[] {
+  const grouped = rows.map(r => groups(r).map(g => groupedWidth(g)))
+  const cols: number[] = []
+  for (const r of grouped) r.forEach((w, i) => (cols[i] = Math.max(cols[i] ?? 0, w)))
+  return grouped.map((r, ri) => {
+    if (r.length < 2) return null
+    const lead = r.slice(0, -1).reduce((sum, _, i) => sum + cols[i]! + GROUP_GAP.length, 0)
+    return lead + r.at(-1)! <= widths[ri]! ? cols.slice(0, r.length - 1) : null
+  })
 }
 
 /** Drops the lowest-ranked segments until the row fits `width`; keeps order. */

@@ -30,7 +30,12 @@ export function lines(node: Node): string[] {
     if ((p.flexDirection ?? 'row') === 'row') {
       const gap = ' '.repeat(Number(p.columnGap ?? p.gap ?? 0))
       const h = Math.max(0, ...parts.map(x => x.length))
-      const widths = parts.map(x => Math.max(0, ...x.map(width)))
+      // a box given a width takes it, as the surfaces lay it out
+      const widths = parts.map((x, j) => {
+        const own = (kids[j] as { props?: Record<string, unknown> } | string | null)
+        const set = typeof own === 'object' && own !== null ? own.props?.width : undefined
+        return typeof set === 'number' ? set : Math.max(0, ...x.map(width))
+      })
       out = []
       for (let i = 0; i < h; i += 1) {
         out.push(parts.map((x, j) => (x[i] ?? '').padEnd(widths[j]!)).join(gap).replace(/\s+$/, ''))

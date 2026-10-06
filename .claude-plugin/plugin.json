@@ -1,6 +1,6 @@
 {
   "name": "tabby",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "A calm dashboard above the prompt: context and rate limits with forecasts, git and PR checks, tests, focus, a mini TODO and Tabby the cat",
   "types": "./types/index.d.ts",
   "author": {

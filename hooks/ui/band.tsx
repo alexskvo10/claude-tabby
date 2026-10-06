@@ -3,14 +3,15 @@
 //   row 1   the session: context, rate limits, cost
 //   row 2   the work: live or last turn, git, tests
 //   row 3   the tasks: Claude's plan, focus, todo (beside the pixel cat; else on row 2)
-// Blocks sit in groups with thin rules between them. Every block is a hover
+// Blocks sit in groups with room between them, lined up in columns across
+// the rows wherever the width allows. Every block is a hover
 // target whose card covers the other row; its label is a button to its tab.
 import type { RenderElement } from 'claude-code'
 
 import { frameAt } from '../lib/anim'
 import { C, pad, truncate } from '../lib/format'
 import { L } from '../lib/i18n'
-import { fit, groupedWidth, groups, GROUP_GAP, partsWidth } from '../lib/layout'
+import { columns, fit, groupedWidth, groups, GROUP_GAP, partsWidth } from '../lib/layout'
 import type { Part, Seg } from '../lib/layout'
 import { face, mood } from '../lib/pet'
 import type { Mood } from '../lib/pet'
@@ -63,20 +64,23 @@ function cardParts(card: readonly Part[], width: number): Part[] {
 }
 
 /**
- * One row of segments in groups: a space inside a group, a thin rule between
- * groups. With `cardTop`, each segment that has a card shows it that many rows
- * away (1 below, -1 above) while hovered.
+ * One row of segments in groups: a space inside a group, room between groups.
+ * With `cols`, each group but the last is a box that wide, so the rows' groups
+ * line up in columns in any font. With `cardTop`, each segment that has a card
+ * shows it that many rows away (1 below, -1 above) while hovered.
  */
-function Row(el: El, segs: readonly Seg[], key: string, width: number, cardTop?: number): RenderElement {
+function Row(el: El, segs: readonly Seg[], key: string, width: number, cardTop?: number, cols?: readonly number[] | null): RenderElement {
   const { Box, Text } = el
   let offset = 0
   const children: RenderElement[] = []
-  const text = (t: string, dim = false) => {
-    children.push(<Text dimColor={dim}>{t}</Text>)
-    offset += Array.from(t).length
-  }
-  groups(segs).forEach((g, gi) => {
-    if (gi > 0) text(GROUP_GAP, true)
+  const gs = groups(segs)
+  gs.forEach((g, gi) => {
+    const start = offset
+    const inner: RenderElement[] = []
+    const text = (t: string) => {
+      inner.push(<Text>{t}</Text>)
+      offset += Array.from(t).length
+    }
     g.forEach((s, si) => {
       if (si > 0) text(' ')
       const left = offset
@@ -87,13 +91,24 @@ function Row(el: El, segs: readonly Seg[], key: string, width: number, cardTop?:
             {Runs(el, cardParts(s.card, width), `${key}-${s.id}-card`)}
           </Box>
         ) : null
-      children.push(
+      inner.push(
         <Box key={`${key}-${s.id}`} flexDirection="row">
           {Runs(el, s.parts, `${key}-${s.id}`)}
           {card}
         </Box>,
       )
     })
+    const col = cols?.[gi]
+    if (col !== undefined) offset = start + col
+    children.push(
+      <Box key={`${key}-g${gi}`} flexDirection="row" {...(col !== undefined ? { width: col } : {})}>
+        {inner}
+      </Box>,
+    )
+    if (gi < gs.length - 1) {
+      children.push(<Text>{GROUP_GAP}</Text>)
+      offset += GROUP_GAP.length
+    }
   })
   return (
     <Box key={key} flexDirection="row">
@@ -201,6 +216,7 @@ export function drawBand(el: El, snap: Snapshot, props: BandProps, on: Handlers)
   // the tasks; without it the work keeps to one row
   const work = fit(showCat ? turnSegs : [...turnSegs, ...taskSegs], rowsWidth, measure)
   const tasks = showCat ? fit(taskSegs, rowsWidth, measure) : []
+  const [sessionCols, workCols, tasksCols] = columns([session, work, tasks], [width, rowsWidth, rowsWidth])
 
   const isIntro = prefs.introSeen <= 3
   const introLine = (w: number) => (
@@ -218,14 +234,14 @@ export function drawBand(el: El, snap: Snapshot, props: BandProps, on: Handlers)
 
   const rows: RenderElement[] = [
     <Box flexDirection="row" justifyContent="space-between">
-      {Row(el, session, 'session', rowsWidth, work.length > 0 || showCat ? 1 : undefined)}
+      {Row(el, session, 'session', rowsWidth, work.length > 0 || showCat ? 1 : undefined, sessionCols)}
       {open}
     </Box>,
-    work.length > 0 ? Row(el, work, 'work', rowsWidth, -1) : <Text> </Text>,
+    work.length > 0 ? Row(el, work, 'work', rowsWidth, -1, workCols) : <Text> </Text>,
   ]
   if (showCat) {
     // the third row: the tasks, else the first sessions' hint, else room for the cat
-    rows.push(tasks.length > 0 ? Row(el, tasks, 'tasks', rowsWidth, -1) : isIntro ? introLine(rowsWidth) : <Text> </Text>)
+    rows.push(tasks.length > 0 ? Row(el, tasks, 'tasks', rowsWidth, -1, tasksCols) : isIntro ? introLine(rowsWidth) : <Text> </Text>)
   }
   const isIntroBelow = isIntro && (!showCat || tasks.length > 0)
 

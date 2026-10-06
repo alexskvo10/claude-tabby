@@ -9,7 +9,7 @@ describe('band', () => {
     await boot($, w)
     for (const surface of ['terminal', 'desktop'] as const) {
       const [session, work, intro] = await band($, 140, surface)
-      expect(session).toMatch(/ctx [█▏▎▍▌▋▊▉ ]+48% 96k\/200k │ 5ч [█▏▎▍▌▋▊▉ ]+23% ↻ 2ч14м │ 7д [█▏▎▍▌▋▊▉ ]+41% ↻ 3д4ч │ \$1\.24/)
+      expect(session).toMatch(/ctx █+ 48% 96k\/200k {3,}5ч █+ 23% ↻ 2ч14м {3,}7д █+ 41% ↻ 3д4ч {3,}\$1\.24/)
       // the cat is pixel art: cells on the terminal, SVG on the desktop
       expect(session).toStartWith('ctx')
       expect(session).toEndWith('≡')
@@ -46,6 +46,22 @@ describe('band', () => {
       for (const line of drawn) expect(Array.from(line).length, `${cols}: ${line}`).toBeLessThanOrEqual(cols)
       expect(drawn[0], `${cols}`).toMatch(/ctx/)
       if (cols >= 50) expect(drawn[1], `${cols}`).toMatch(/feature\/band/)
+    }
+  })
+
+  test('the rows line their blocks up in columns', async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    await command($, w, 'todo', '!Починить логин')
+    await command($, w, 'focus', 'Плашка над вводом 25')
+    await turn($, w, 34_000, 3)
+    for (const surface of ['terminal', 'desktop'] as const) {
+      const [session, work, tasks] = await band($, 120, surface)
+      // the second column: the 5h limit, git and the list start in one place
+      const at = Array.from(session!).join('').indexOf('5ч')
+      expect(work!.indexOf('⎇'), surface).toBe(at)
+      expect(tasks!.indexOf('☐'), surface).toBe(at)
+      expect(session).not.toMatch(/│/)
     }
   })
 
@@ -551,7 +567,7 @@ describe('settings', () => {
     const w = world(on)
     await boot($, w)
     const [session, work] = await band($, 140)
-    expect(session).toMatch(/ctx [█▏▎▍▌▋▊▉ ]+48% 96k\/200k │ 5h [█▏▎▍▌▋▊▉ ]+23% ↻ 2h14m │ 7d/)
+    expect(session).toMatch(/ctx █+ 48% 96k\/200k {3,}5h █+ 23% ↻ 2h14m {3,}7d/)
     expect(work).toBe('⎇ feature/band ↑1 ✚2')
     expect(await pane($, w, 'overview')).toMatch(/1: Overview\s+2: Git ✚2\s+3: Tasks\s+4: Tests\s+5: Tabby[\s\S]*✓ all calm/)
     expect(await command($, w, 'focus', 'ship it 30')).toBe('◎ Focus: "ship it" · 30 min.')
