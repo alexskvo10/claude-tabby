@@ -1,7 +1,7 @@
 // The dashboard pane: five tabs (keys 1-5 while it holds the keyboard), each
 // a grid of rounded cards, two across when the pane is wide enough. Where the
-// surface draws cells (the terminal) gauges are rings and Tabby is pixel art;
-// elsewhere the same facts read as bars and text.
+// surface draws cells (the terminal) or SVG (desktop, VS Code, phone) gauges
+// are rings and Tabby is pixel art; elsewhere the same facts read as bars and text.
 import type { RenderElement } from 'claude-code'
 
 import type { TabId } from '../../types'
@@ -29,9 +29,10 @@ import { achievements, art, level, mood, XP } from '../lib/pet'
 import type { Mood } from '../lib/pet'
 import { along, bigText, css, mix, rgb, ring, squares, toCells } from '../lib/pixels'
 import { bigCat } from '../lib/sprites'
+import { bigTextSvg, ringSvg, squaresSvg } from '../lib/svg'
 import { dayKey, lastDays, streak } from '../lib/stats'
 import type { Handlers, Snapshot } from '../snapshot'
-import { barParts, Line, merge } from './parts'
+import { barParts, CatSvg, Line, merge } from './parts'
 import type { El } from './parts'
 
 const TABS: readonly { id: TabId; key: string }[] = [
@@ -123,6 +124,12 @@ function Gauge(
 ): RenderElement {
   const { Box, Text } = el
   const Raster = 'Raster' in el ? el.Raster : undefined
+  const Svg = 'Svg' in el ? el.Svg : undefined
+  if (Raster === undefined && Svg !== undefined) {
+    const fill = rgb(color ?? heat(pct))
+    const source = ringSvg(pct, size * 8, fill, rgb(track ?? C.track), label, rgb(labelColor ?? color ?? heat(pct)))
+    return <Svg key={key} source={source} alt={`${label} · ${percent(pct)}`} />
+  }
   if (Raster === undefined) return Line(el, [...barParts(pct, fallbackWidth, color), { text: ` ${label}`, color: color ?? heat(pct), bold: true }])
   const stops = color !== undefined ? [rgb(color)] : [rgb(C.green), rgb(C.yellow), rgb(C.red)]
   const rows = Math.ceil(size / 2)
@@ -161,6 +168,11 @@ function heatmap(el: El, values: readonly number[]): RenderElement[] {
   if (Raster !== undefined) {
     const colorOf = (v: number) => (v === 0 ? rgb(C.track) : mix(rgb(C.track), rgb(C.accent), 0.35 + 0.65 * (v / max)))
     return [<Raster key="heatmap" {...toCells(squares(values, 7, colorOf))} />]
+  }
+  const Svg = 'Svg' in el ? el.Svg : undefined
+  if (Svg !== undefined) {
+    const colorOf = (v: number) => (v === 0 ? rgb(C.track) : mix(rgb(C.track), rgb(C.accent), 0.35 + 0.65 * (v / max)))
+    return [<Svg key="heatmap" source={squaresSvg(values, 7, colorOf, 14)} alt={L.overview.today} />]
   }
   const rows: RenderElement[] = []
   for (let r = 0; r < values.length; r += 7) {
@@ -298,7 +310,8 @@ function overviewTab({ el, snap, width }: Ctx): RenderElement {
       </Text>,
     ])
   } else {
-    const isRaster = 'Raster' in el
+    // rings side by side where they draw (cells or SVG); bars stacked elsewhere
+    const isRaster = 'Raster' in el || 'Svg' in el
     const items = usage.limits.slice(0, 3).map(l => {
       const left = until(l.resetsAt, now)
       const b = burn(samples, l.kind, now, left)
@@ -511,6 +524,7 @@ function tasksTab({ el, snap, width, hasInput, on }: Ctx): RenderElement {
   const { todos, focus, plan, now } = snap
   const Input = 'Input' in el ? el.Input : undefined
   const Raster = 'Raster' in el ? el.Raster : undefined
+  const Svg = 'Svg' in el ? el.Svg : undefined
   const half = cardWidth(width)
 
   // focus: a big clock and a progress bar
@@ -525,6 +539,12 @@ function tasksTab({ el, snap, width, hasInput, on }: Ctx): RenderElement {
       focusBody.push(
         <Box marginTop={1}>
           <Raster key="focus-clock" {...toCells(bigText(shown, rgb(C.accent)))} />
+        </Box>,
+      )
+    } else if (Svg !== undefined) {
+      focusBody.push(
+        <Box marginTop={1}>
+          <Svg key="focus-clock" source={bigTextSvg(shown, rgb(C.accent), 44)} alt={shown} />
         </Box>,
       )
     }
@@ -719,7 +739,7 @@ function petTab({ el, snap, width, on }: Ctx): { tree: RenderElement; mood: Mood
   const run = streak(stats, now)
   const half = cardWidth(width)
 
-  // pixels where cells draw, a picture in kitty and Ghostty, text elsewhere
+  // pixels where cells draw, a picture in kitty and Ghostty, SVG off the terminal
   const Raster = 'Raster' in el ? el.Raster : undefined
   const Image = 'Image' in el ? el.Image : undefined
   const sprite = m === 'sleep' ? 'sleep' : m === 'sad' ? 'sad' : m === 'work' ? 'work' : 'happy'
@@ -730,6 +750,8 @@ function petTab({ el, snap, width, on }: Ctx): { tree: RenderElement; mood: Mood
   } else if (Raster !== undefined) {
     picture = <Raster key="bigcat" {...toCells(bigCat(m, frameAt(m, now, 'big')))} />
     hasCat = true
+  } else if ('Svg' in el) {
+    picture = CatSvg(el, 'bigcat', m, 'big', now, snap.animate)!
   } else {
     picture = (
       <Box flexDirection="column">

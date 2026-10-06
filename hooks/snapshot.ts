@@ -36,6 +36,8 @@ export type Snapshot = {
   pomodoroMinutes: number
   /** the terminal draws pictures (kitty graphics) */
   canImage: boolean
+  /** Tabby moves (the Animate Tabby setting) */
+  animate: boolean
 }
 
 /** What a press in a drawing may ask for; does nothing until the session starts. */

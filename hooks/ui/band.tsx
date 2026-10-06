@@ -1,5 +1,5 @@
 // The band above the prompt: two calm rows, or one in compact mode.
-//   left    Tabby in pixel art, animated (terminal), or as a face in text
+//   left    Tabby in pixel art, animated: cells on the terminal, SVG elsewhere
 //   row 1   the session: context, rate limits, cost
 //   row 2   the work: live or last turn, git, tests
 //   row 3   the tasks: Claude's plan, focus, todo (beside the pixel cat; else on row 2)
@@ -19,6 +19,7 @@ import { smallCat } from '../lib/sprites'
 import type { Handlers, Snapshot } from '../snapshot'
 import type { El } from './parts'
 import {
+  CatSvg,
   compactHintSeg,
   costSeg,
   ctxLeftSeg,
@@ -107,8 +108,12 @@ export function drawBand(el: El, snap: Snapshot, props: BandProps, on: Handlers)
   const { usage, samples, git, turns, live, todos, plan, tests, focus, pet, prefs, now } = snap
   const measure = groupedWidth
   const Raster = 'Raster' in el ? el.Raster : undefined
-  const hasCat = prefs.isPetShown && !prefs.isCompact && Raster !== undefined
-  const rowsWidth = Math.max(10, props.bodyColumns - (hasCat ? CAT_COLUMNS + 1 : 0))
+  const hasSvg = 'Svg' in el
+  // the pixel cat: cells on the terminal, SVG on the other surfaces
+  const showCat = prefs.isPetShown && !prefs.isCompact && (Raster !== undefined || hasSvg)
+  // only the cells are repainted by the animator; the SVG plays itself
+  const hasCat = showCat && Raster !== undefined
+  const rowsWidth = Math.max(10, props.bodyColumns - (showCat ? CAT_COLUMNS + 1 : 0))
   const width = rowsWidth - 2
   const isWide = width >= 100
   const barWidth = isWide ? 10 : width >= 76 ? 8 : 5
@@ -123,7 +128,7 @@ export function drawBand(el: El, snap: Snapshot, props: BandProps, on: Handlers)
     sinceUnlockMs: pet.lastUnlock === null ? Infinity : now - pet.lastUnlockAt,
   })
   const textCat: Seg | null =
-    prefs.isPetShown && !hasCat
+    prefs.isPetShown && !showCat
       ? {
           id: 'cat',
           group: 'cat',
@@ -191,8 +196,8 @@ export function drawBand(el: El, snap: Snapshot, props: BandProps, on: Handlers)
   ])
   // the pixel cat stands three rows tall: the work splits into the turn and
   // the tasks; without it the work keeps to one row
-  const work = fit(hasCat ? turnSegs : [...turnSegs, ...taskSegs], rowsWidth, measure)
-  const tasks = hasCat ? fit(taskSegs, rowsWidth, measure) : []
+  const work = fit(showCat ? turnSegs : [...turnSegs, ...taskSegs], rowsWidth, measure)
+  const tasks = showCat ? fit(taskSegs, rowsWidth, measure) : []
 
   const isIntro = prefs.introSeen <= 3
   const introLine = (w: number) => (
@@ -201,25 +206,25 @@ export function drawBand(el: El, snap: Snapshot, props: BandProps, on: Handlers)
     </Text>
   )
 
-  const cat =
-    hasCat && Raster !== undefined ? (
-      <Box marginRight={1}>
-        <Raster key="cat" {...toCells(smallCat(catMood, frameAt(catMood, now, 'small')))} />
-      </Box>
-    ) : null
+  const picture = !showCat
+    ? null
+    : Raster !== undefined
+      ? <Raster key="cat" {...toCells(smallCat(catMood, frameAt(catMood, now, 'small')))} />
+      : CatSvg(el, 'cat', catMood, 'small', now, snap.animate)
+  const cat = picture === null ? null : <Box marginRight={1}>{picture}</Box>
 
   const rows: RenderElement[] = [
     <Box flexDirection="row" justifyContent="space-between">
-      {Row(el, session, 'session', rowsWidth, work.length > 0 || hasCat ? 1 : undefined)}
+      {Row(el, session, 'session', rowsWidth, work.length > 0 || showCat ? 1 : undefined)}
       {open}
     </Box>,
     work.length > 0 ? Row(el, work, 'work', rowsWidth, -1) : <Text> </Text>,
   ]
-  if (hasCat) {
+  if (showCat) {
     // the third row: the tasks, else the first sessions' hint, else room for the cat
     rows.push(tasks.length > 0 ? Row(el, tasks, 'tasks', rowsWidth, -1) : isIntro ? introLine(rowsWidth) : <Text> </Text>)
   }
-  const isIntroBelow = isIntro && (!hasCat || tasks.length > 0)
+  const isIntroBelow = isIntro && (!showCat || tasks.length > 0)
 
   const tree = (
     <Box flexDirection="column" width={props.bodyColumns}>

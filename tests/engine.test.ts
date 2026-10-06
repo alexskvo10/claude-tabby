@@ -10,8 +10,8 @@ describe('band', () => {
     for (const surface of ['terminal', 'desktop'] as const) {
       const [session, work, intro] = await band($, 140, surface)
       expect(session).toMatch(/ctx [█▏▎▍▌▋▊▉ ]+48% 96k\/200k │ 5ч [█▏▎▍▌▋▊▉ ]+23% ↻ 2ч14м │ 7д [█▏▎▍▌▋▊▉ ]+41% ↻ 3д4ч │ \$1\.24/)
-      // the cat is pixel art where cells draw, a face in text elsewhere
-      if (surface === 'desktop') expect(session).toStartWith('(=^･ω･^=) │ ctx')
+      // the cat is pixel art: cells on the terminal, SVG on the desktop
+      expect(session).toStartWith('ctx')
       expect(session).toEndWith('≡')
       expect(work).toBe('⎇ feature/band ↑1 ✚2')
       expect(intro).toMatch(/^Tabby: ≡ или \/tab — панель/)
@@ -57,10 +57,47 @@ describe('band', () => {
     await $.tool.call({ tool: 'Grep', pattern: 'x' } as never)
     await w.clock.advance(12_000)
     const [session, work] = await band($, 140, 'desktop')
-    expect(session).toMatch(/^\(=•ω•=\)/)
+    expect(session).toMatch(/^ctx/)
     expect(work).toMatch(/^[●◉○] 12с · 2 инстр · Grep/)
     const ui = await $.ui.mount({ surface: 'terminal', ...BAND(140, true) })
     expect(await ui.find({ type: 'Raster', key: 'cat' })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('off the terminal Tabby is an SVG that plays its own loop', async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    await $.turn.start({ text: 'go', turnId: 'live' })
+    for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
+      const ui = await $.ui.mount({ surface, ...BAND(140, true) })
+      const cat = (await ui.find({ type: 'Svg' })) as unknown as { props: { source: string; alt: string; isInteractive?: boolean } } | undefined
+      expect(cat, surface).toBeDefined()
+      expect(cat!.props.alt).toBe('помогает')
+      expect(cat!.props.source).toStartWith('<svg')
+      expect(cat!.props.source).toContain('<animate')
+      expect(cat!.props.isInteractive).toBe(true)
+      expect(cat!.props.source.length).toBeLessThan(131_072)
+      await ui.unmount()
+    }
+    // the pane's big cat, rings, squares and clock are SVG too, each within the bound
+    await command($, w, 'focus', 'Плашка 25')
+    for (const tab of ['pet', 'overview', 'tasks']) {
+      await command($, w, 'tab', tab)
+      const ui = await $.ui.mount({ surface: 'desktop', ...PANE(100) })
+      const all = (await ui.findAll({ type: 'Svg' })) as unknown as { props: { source: string } }[]
+      expect(all.length, tab).toBeGreaterThan(0)
+      for (const svg of all) expect(svg.props.source.length).toBeLessThan(131_072)
+      await ui.unmount()
+    }
+  })
+
+  test('with Animate Tabby off the SVG cat holds still', { options: { animate: false } }, async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    const ui = await $.ui.mount({ surface: 'desktop', ...BAND(140) })
+    const cat = (await ui.find({ type: 'Svg' })) as unknown as { props: { source: string; isInteractive?: boolean } }
+    expect(cat.props.source).not.toContain('<animate')
+    expect(cat.props.isInteractive).toBeUndefined()
     await ui.unmount()
   })
 

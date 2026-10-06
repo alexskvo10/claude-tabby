@@ -503,6 +503,7 @@ export const register: Register = (on, options) => {
       autoTests: opts.autoTests,
       pomodoroMinutes: opts.pomodoroMinutes,
       canImage,
+      animate: opts.animate,
     }
     const drawn = drawBand(forSurface($.ui.resolve(e), e.surface), snap, e.props, handlers)
     // the animator repaints the pixel cat between draws
@@ -535,6 +536,7 @@ export const register: Register = (on, options) => {
       autoTests: opts.autoTests,
       pomodoroMinutes: opts.pomodoroMinutes,
       canImage,
+      animate: opts.animate,
     }
     const drawn = drawPane(forSurface($.ui.resolve(e), e.surface), snap, e.props.bodyColumns, e.surface !== 'mobile', handlers)
     paneCat = drawn.hasCat && opts.animate ? { requestId: e.requestId, key: 'bigcat', size: 'big', mood: drawn.mood, frame: -1 } : null
