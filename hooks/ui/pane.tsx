@@ -196,25 +196,47 @@ export function drawPane(el: El, snap: Snapshot, bodyColumns: number, hasInput: 
   const width = Math.max(24, bodyColumns)
   const ctx: Ctx = { el, snap, width, hasInput, on }
 
-  // tabs, with an accent line under the one shown
-  let underline = ''
+  // tabs, with an accent line under the one shown: on the terminal a line of
+  // cells; elsewhere the labels are in a proportional font, so the line hangs
+  // under its own tab, as wide as the tab and clipped there
   const labels = TABS.map(t => `${L.tabs[t.id]}${badge(t.id, snap)}`)
-  TABS.forEach((t, i) => {
-    const w = 3 + Array.from(labels[i]!).length
-    underline += (i > 0 ? '  ' : '') + (t.id === tab ? '▔'.repeat(w) : ' '.repeat(w))
-  })
-  const header = (
-    <Box flexDirection="column">
-      <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
+  const tabButton = (t: (typeof TABS)[number], i: number) => (
+    <Button key={`tab-${t.id}`} label={labels[i]!} hotkey={t.key} plain dimColor={tab !== t.id} onPress={() => on.setTab(t.id)} />
+  )
+  let header: RenderElement
+  if ('Raster' in el) {
+    let underline = ''
+    TABS.forEach((t, i) => {
+      const w = 3 + Array.from(labels[i]!).length
+      underline += (i > 0 ? '  ' : '') + (t.id === tab ? '▔'.repeat(w) : ' '.repeat(w))
+    })
+    header = (
+      <Box flexDirection="column">
+        <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
+          {TABS.map(tabButton)}
+        </Box>
+        <Text color={C.accent} wrap="truncate-end">
+          {underline}
+        </Text>
+      </Box>
+    )
+  } else {
+    header = (
+      <Box flexDirection="row" flexWrap="wrap" columnGap={2} rowGap={1} marginBottom={1}>
         {TABS.map((t, i) => (
-          <Button key={`tab-${t.id}`} label={labels[i]!} hotkey={t.key} plain dimColor={tab !== t.id} onPress={() => on.setTab(t.id)} />
+          <Box key={`tabbox-${t.id}`} flexDirection="column">
+            {tabButton(t, i)}
+            {t.id === tab ? (
+              // longer than any font draws the tab; the box clips it, with no ellipsis
+              <Box position="absolute" top={1} left={0} right={0} height={1} overflow="hidden">
+                <Text color={C.accent}>{'▔'.repeat(2 * (3 + Array.from(labels[i]!).length))}</Text>
+              </Box>
+            ) : null}
+          </Box>
         ))}
       </Box>
-      <Text color={C.accent} wrap="truncate-end">
-        {underline}
-      </Text>
-    </Box>
-  )
+    )
+  }
 
   let body: RenderElement
   let paneMood: Mood = 'happy'

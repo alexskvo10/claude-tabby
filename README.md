@@ -10,8 +10,8 @@ Context and rate limits with forecasts · git and PR checks · tests · focus ti
 
 <p>
   <img alt="Claude Code plugin" src="https://img.shields.io/badge/Claude_Code-plugin-D97757?style=flat-square">
-  <img alt="Version 0.4.1" src="https://img.shields.io/badge/version-0.4.1-3B4252?style=flat-square">
-  <img alt="71 tests" src="https://img.shields.io/badge/tests-71_passing-7FD4C1?style=flat-square">
+  <img alt="Version 0.4.2" src="https://img.shields.io/badge/version-0.4.2-3B4252?style=flat-square">
+  <img alt="72 tests" src="https://img.shields.io/badge/tests-72_passing-7FD4C1?style=flat-square">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-F4C7A1?style=flat-square">
 </p>
 
@@ -156,7 +156,7 @@ PR status and checks need the [`gh`](https://cli.github.com) CLI, installed and 
 
 ```bash
 claude plugin validate .   # the manifest and the hooks module, as the engine sees them
-claude plugin test .       # 71 tests: helpers, the band, the pane, commands, settings
+claude plugin test .       # 72 tests: helpers, the band, the pane, commands, settings
 tsc -p .                   # after a first load the engine puts its types in .claude-plugin/types/
 ```
 

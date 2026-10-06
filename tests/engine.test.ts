@@ -548,6 +548,25 @@ describe('pane', () => {
     await ui.unmount()
   })
 
+  test('the accent line sits under the open tab, as wide as the tab', async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    type N = { type: string; props?: Record<string, unknown>; children?: unknown[] }
+    const all = (n: unknown): N[] => (typeof n === 'object' && n !== null ? [n as N, ...((n as N).children ?? []).flatMap(all)] : [])
+    const ui = await $.ui.mount({ surface: 'desktop', ...PANE(100) })
+    // off the terminal the labels are in a proportional font: the line is
+    // clipped to its own tab's box, never counted out in cells across the row
+    const nodes = all(await ui.drawn())
+    const lined = nodes.filter(n => n.type === 'Box' && n.props?.position === 'absolute' && n.props?.overflow === 'hidden')
+    expect(lined).toHaveLength(1)
+    const owner = nodes.find(n => n.type === 'Box' && (n.children ?? []).includes(lined[0]))!
+    expect(all(owner).some(n => n.type === 'Button' && /Обзор/.test(String(n.props?.label)))).toBe(true)
+    await ui.unmount()
+    // the terminal keeps its line of cells under the row
+    const drawn = (await pane($, w, 'overview')).split('\n')
+    expect(drawn[1]).toMatch(/^▔{8}\s*$/)
+  })
+
   test('a terminal that draws pictures gets the pixel cat', async ($, on) => {
     const w = world(on, { env: { TERM: 'xterm-kitty', KITTY_WINDOW_ID: '1' } })
     await boot($, w)
