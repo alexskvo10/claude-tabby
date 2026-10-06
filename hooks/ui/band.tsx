@@ -135,7 +135,8 @@ export function drawBand(el: El, snap: Snapshot, props: BandProps, on: Handlers)
   // instead; only a band too narrow for the context block shortens its bar,
   // and one too narrow for three bars draws the limits without theirs
   const barWidth = Math.max(3, Math.min(10, width - 9))
-  const limitBar = width >= 70 ? 8 : 0
+  // the limits' bars match the context's, so all three read on one scale
+  const limitBar = width >= 70 ? barWidth : 0
 
   const last = turns.history.at(-1)
   const catMood = mood({

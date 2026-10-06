@@ -62,6 +62,8 @@ describe('band', () => {
       expect(work!.indexOf('⎇'), surface).toBe(at)
       expect(tasks!.indexOf('☐'), surface).toBe(at)
       expect(session).not.toMatch(/│/)
+      // all three bars are one length
+      expect(session!.match(/█+/g)!.map(m => m.length)).toEqual([10, 10, 10])
     }
   })
 
