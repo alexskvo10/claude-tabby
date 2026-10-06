@@ -101,8 +101,10 @@ export function world(
     if (cmd === 'sh' || cmd === 'cmd.exe') return { value: done(w.tests.exitCode, w.tests.stdout) }
     return { value: done(1, '') }
   })
-  on('fs.exists', ($, e) => ({ value: e.path in files }))
-  on('fs.read', ($, e) => ({ value: files[e.path] ?? '' }))
+  // the engine hands paths over in the platform's form: C:\repo\package.json on Windows
+  const posix = (path: string) => path.replace(/^[A-Za-z]:/, '').replace(/\\/g, '/')
+  on('fs.exists', ($, e) => ({ value: posix(e.path) in files }))
+  on('fs.read', ($, e) => ({ value: files[posix(e.path)] ?? '' }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('tool.register', ($, e) => ({ value: { tool: `mcp__tabby__${e.name}` } }))
   on('ui.toast', ($, e) => {
