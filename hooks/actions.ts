@@ -187,21 +187,25 @@ export function createActions(h: Host, opts: Options) {
   let limitsAt = 0
 
   async function freshestLimits(own: TabRateLimit[], now: number, isFresh: boolean): Promise<TabRateLimit[]> {
+    // no limits of its own (an API key, say): another account's are not this session's
+    if (own.length === 0) return own
     const key = JSON.stringify(own)
-    if (own.length > 0 && (isFresh || (seenLimits !== undefined && key !== seenLimits))) limitsAt = now
-    if (own.length > 0) seenLimits = key
+    if (isFresh || (seenLimits !== undefined && key !== seenLimits)) limitsAt = now
+    seenLimits = key
     let shared: { at: number; limits: TabRateLimit[] } | undefined
     try {
       const text = await h.shared.read()
       const parsed = text === undefined ? undefined : (JSON.parse(text) as unknown)
       if (typeof parsed === 'object' && parsed !== null && typeof (parsed as { at?: unknown }).at === 'number' && Array.isArray((parsed as { limits?: unknown }).limits)) {
-        shared = parsed as { at: number; limits: TabRateLimit[] }
+        const read = parsed as { at: number; limits: TabRateLimit[] }
+        // a reading with a window that has reset since says nothing of the new one
+        if (!read.limits.some(l => l.resetsAt !== undefined && Date.parse(l.resetsAt) <= now)) shared = read
       }
     } catch {
       // a file another session is writing reads as nothing this time
     }
     if (shared !== undefined && shared.at > limitsAt) return shared.limits
-    if (own.length > 0 && (shared === undefined || limitsAt > shared.at)) {
+    if (shared === undefined || limitsAt > shared.at) {
       await h.shared.write(JSON.stringify({ at: limitsAt, limits: own })).catch(() => undefined)
     }
     return own
@@ -262,7 +266,8 @@ export function createActions(h: Host, opts: Options) {
     const live = await h.state.live.get()
     let usage: TabUsage | null = null
     try {
-      usage = await refreshUsage(true)
+      // an aborted turn may have had no reply: its figures are not news
+      usage = await refreshUsage(!end.isAborted)
     } catch {
       usage = await h.state.usage.get()
     }

@@ -216,6 +216,38 @@ describe('forecasts', () => {
     expect(JSON.parse(files[SHARED]!).limits[0]).toMatchObject({ kind: 'five_hour', percent: 23 })
   })
 
+  const SHARED = '/home/.claude/tabby-limits.json'
+  const reading = (percent: number, resetsAt: string) => JSON.stringify({ at: NOW - 1000, limits: [{ kind: 'five_hour', percent, resetsAt }] })
+
+  test('a shared reading whose window has reset is no news', async ($, on) => {
+    const files: Record<string, string> = { [SHARED]: reading(83, '2026-10-05T11:00:00Z') }
+    const w = world(on, { env: { HOME: '/home' }, files })
+    await boot($, w)
+    // the session keeps its own, warns of nothing, and mends the file
+    expect((await band($, 140))[0]).toMatch(/5ч █+ 23%/)
+    expect(w.toasts.some(t => /83%/.test(t))).toBe(false)
+    expect(JSON.parse(files[SHARED]!).limits[0]).toMatchObject({ percent: 23 })
+  })
+
+  test('an aborted turn does not stamp its old limits as new', async ($, on) => {
+    const files: Record<string, string> = { [SHARED]: reading(77, '2026-10-05T14:14:00Z') }
+    const w = world(on, { env: { HOME: '/home' }, files })
+    await boot($, w)
+    await $.turn.start({ text: 'go', turnId: 'stop' })
+    await $.turn.complete({ answer: '', durationMs: 500, isAborted: true, turnId: 'stop', reason: 'aborted' } as never)
+    await w.clock.settle()
+    expect((await band($, 140))[0]).toMatch(/5ч █+ 77%/)
+    expect(JSON.parse(files[SHARED]!).limits[0]).toMatchObject({ percent: 77 })
+  })
+
+  test('a session with no limits of its own shows none, not another account’s', async ($, on) => {
+    const files: Record<string, string> = { [SHARED]: reading(77, '2026-10-05T14:14:00Z') }
+    const w = world(on, { env: { HOME: '/home' }, files })
+    w.isFresh = true
+    await boot($, w)
+    expect((await band($, 140))[0]).not.toMatch(/5ч/)
+  })
+
   test('warn once as context and limits fill up', async ($, on) => {
     const w = world(on)
     await boot($, w)
