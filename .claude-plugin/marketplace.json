@@ -1,0 +1,14 @@
+{
+  "name": "tabby",
+  "description": "Tabby: a calm dashboard above the Claude Code prompt",
+  "owner": {
+    "name": "alexskvo10"
+  },
+  "plugins": [
+    {
+      "name": "tabby",
+      "source": "./",
+      "description": "Context and rate limits with forecasts, git and PR checks, tests, focus, a mini TODO and Tabby the cat"
+    }
+  ]
+}
