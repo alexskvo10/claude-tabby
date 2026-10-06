@@ -132,6 +132,11 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     const started = await next(e)
+    // the limits every session shares, beside the user's Claude Code settings
+    const sharedPath = async (): Promise<string | null> => {
+      const home = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME'))
+      return home === undefined ? null : `${home}/.claude/tabby-limits.json`
+    }
     const host: Host = {
       now: () => $.clock.now(),
       run: (argv, init) => $.process.run(argv, init),
@@ -142,6 +147,16 @@ export const register: Register = (on, options) => {
       storeSet: (key, value) => $.store.set(key, value),
       exists: path => $.fs.exists(path),
       readFile: path => $.fs.read(path),
+      shared: {
+        read: async () => {
+          const path = await sharedPath()
+          return path !== null && (await $.fs.exists(path)) ? $.fs.read(path) : undefined
+        },
+        write: async text => {
+          const path = await sharedPath()
+          if (path !== null) await $.fs.write(path, text)
+        },
+      },
       toast: (text, toastOptions) => $.ui.toast(text, toastOptions),
       log: text => $.ui.log(text, { to: 'debug' }),
       after: (ms, fn) => $.clock.after(ms, fn),

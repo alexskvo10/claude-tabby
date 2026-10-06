@@ -36,6 +36,8 @@ export type Host = {
   storeSet: (key: string, value: unknown) => Promise<void>
   exists: (path: string) => Promise<boolean>
   readFile: (path: string) => Promise<string>
+  /** a file every session of the user reads and writes: undefined when unset */
+  shared: { read: () => Promise<string | undefined>; write: (text: string) => Promise<void> }
   toast: (text: string, options?: ToastOptions) => void
   log: (text: string) => void
   after: (ms: number, fn: () => void) => Timer

@@ -9,6 +9,7 @@ import type {
   TabPet,
   TabPlanItem,
   TabPr,
+  TabRateLimit,
   TabTests,
   TabTodo,
   TabTurn,
@@ -179,14 +180,43 @@ export function createActions(h: Host, opts: Options) {
     }
   }
 
-  async function refreshUsage(): Promise<TabUsage> {
+  // A session hears of the account's limits only with its own replies, so an
+  // idle one goes stale. Each keeps when its own last moved, and the freshest
+  // any session has seen is shared through one file.
+  let seenLimits: string | undefined
+  let limitsAt = 0
+
+  async function freshestLimits(own: TabRateLimit[], now: number, isFresh: boolean): Promise<TabRateLimit[]> {
+    const key = JSON.stringify(own)
+    if (own.length > 0 && (isFresh || (seenLimits !== undefined && key !== seenLimits))) limitsAt = now
+    if (own.length > 0) seenLimits = key
+    let shared: { at: number; limits: TabRateLimit[] } | undefined
+    try {
+      const text = await h.shared.read()
+      const parsed = text === undefined ? undefined : (JSON.parse(text) as unknown)
+      if (typeof parsed === 'object' && parsed !== null && typeof (parsed as { at?: unknown }).at === 'number' && Array.isArray((parsed as { limits?: unknown }).limits)) {
+        shared = parsed as { at: number; limits: TabRateLimit[] }
+      }
+    } catch {
+      // a file another session is writing reads as nothing this time
+    }
+    if (shared !== undefined && shared.at > limitsAt) return shared.limits
+    if (own.length > 0 && (shared === undefined || limitsAt > shared.at)) {
+      await h.shared.write(JSON.stringify({ at: limitsAt, limits: own })).catch(() => undefined)
+    }
+    return own
+  }
+
+  /** With `isFresh`, a reply just came: this session's limits are the newest there are. */
+  async function refreshUsage(isFresh = false): Promise<TabUsage> {
     const u = await h.usage()
     const now = await h.now()
+    const own = u.rateLimits.map(l => ({ kind: l.kind, percent: l.percentUsed, resetsAt: l.resetsAt }))
     const next: TabUsage = {
       tokens: u.context.tokens,
       window: u.context.window,
       percent: u.context.percent,
-      limits: u.rateLimits.map(l => ({ kind: l.kind, percent: l.percentUsed, resetsAt: l.resetsAt })),
+      limits: await freshestLimits(own, now, isFresh),
       costUsd: u.cost?.usd,
       startedAt: u.startedAt,
     }
@@ -232,7 +262,7 @@ export function createActions(h: Host, opts: Options) {
     const live = await h.state.live.get()
     let usage: TabUsage | null = null
     try {
-      usage = await refreshUsage()
+      usage = await refreshUsage(true)
     } catch {
       usage = await h.state.usage.get()
     }

@@ -64,6 +64,26 @@ function cardParts(card: readonly Part[], width: number): Part[] {
 }
 
 /**
+ * A card as one run of text, so it is cut, if at all, only at its end. The
+ * terminal pads it to cover the row beneath; elsewhere the surface draws the
+ * card on its own ground, and the text wraps rather than lose its end.
+ */
+function Card(el: El, card: readonly Part[], width: number): RenderElement {
+  const { Text } = el
+  const isTerminal = 'Raster' in el
+  const parts = isTerminal ? cardParts(card, width) : [{ text: '› ', color: C.accent }, ...card]
+  return (
+    <Text wrap={isTerminal ? 'truncate-end' : 'wrap'}>
+      {parts.map(p => (
+        <Text color={p.color} dimColor={p.dim} bold={p.bold}>
+          {p.text}
+        </Text>
+      ))}
+    </Text>
+  )
+}
+
+/**
  * One row of segments in groups: a space inside a group, room between groups.
  * With `cols`, each group but the last is a box that wide, so the rows' groups
  * line up in columns in any font. With `cardTop`, each segment that has a card
@@ -88,7 +108,7 @@ function Row(el: El, segs: readonly Seg[], key: string, width: number, cardTop?:
       const card =
         cardTop !== undefined && s.card !== undefined ? (
           <Box position="absolute" top={cardTop} left={-left} width={width} display="none" hover={{ display: 'flex' }} flexDirection="row">
-            {Runs(el, cardParts(s.card, width), `${key}-${s.id}-card`)}
+            {Card(el, s.card, width)}
           </Box>
         ) : null
       inner.push(

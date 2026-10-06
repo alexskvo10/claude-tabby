@@ -132,6 +132,13 @@ describe('band', () => {
     expect(await ui.find({ type: 'Text', text: /сброс в \d+:14 \(через 2ч 14м\)/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /2 изменённых файла/ })).toBeDefined()
     await ui.unmount()
+    // off the terminal a card is one text that wraps: its pieces are never cut one by one
+    const desk = await $.ui.mount({ surface: 'desktop', ...BAND(140) })
+    const limit = (await desk.find({ type: 'Text', text: /^› Лимит 5ч: 23% · сброс в \d+:14 \(через 2ч 14м\)/ })) as unknown as
+      | { props: { wrap?: string } }
+      | undefined
+    expect(limit?.props.wrap).toBe('wrap')
+    await desk.unmount()
   })
 
   test('labels are buttons: they open their tab or act', async ($, on) => {
@@ -191,6 +198,22 @@ describe('forecasts', () => {
     expect(w.toasts.some(t => /При таком темпе лимит 5ч кончится через/.test(t))).toBe(true)
     expect(await pane($, w, 'overview')).toMatch(/⚠ лимит 5ч кончится раньше сброса/)
     expect(await card($, w, 'overview', 'card-limits')).toMatch(/55%\s+41%\n5ч\s+7д\n↻ 1ч\d+м\s+↻ 3д3ч\n⚠ 2\dм/)
+  })
+
+  test('every session shows the freshest limits any session has seen', async ($, on) => {
+    const SHARED = '/home/.claude/tabby-limits.json'
+    // another chat heard of the limits a second ago; this one's are from its last reply, long since
+    const files: Record<string, string> = {
+      '/repo/package.json': '{"scripts":{"test":"vitest run"}}',
+      [SHARED]: JSON.stringify({ at: NOW - 1000, limits: [{ kind: 'five_hour', percent: 77, resetsAt: '2026-10-05T14:14:00Z' }] }),
+    }
+    const w = world(on, { env: { HOME: '/home' }, files })
+    await boot($, w)
+    expect((await band($, 140))[0]).toMatch(/5ч █+ 77%/)
+    // a reply of its own makes this session's figures the newest, for everyone
+    await turn($, w, 5_000, 1)
+    expect((await band($, 140))[0]).toMatch(/5ч █+ 23%/)
+    expect(JSON.parse(files[SHARED]!).limits[0]).toMatchObject({ kind: 'five_hour', percent: 23 })
   })
 
   test('warn once as context and limits fill up', async ($, on) => {

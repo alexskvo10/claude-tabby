@@ -105,6 +105,10 @@ export function world(
   const posix = (path: string) => path.replace(/^[A-Za-z]:/, '').replace(/\\/g, '/')
   on('fs.exists', ($, e) => ({ value: posix(e.path) in files }))
   on('fs.read', ($, e) => ({ value: files[posix(e.path)] ?? '' }))
+  on('fs.write', ($, e) => {
+    files[posix(e.path)] = e.text
+    return { value: undefined }
+  })
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('tool.register', ($, e) => ({ value: { tool: `mcp__tabby__${e.name}` } }))
   on('ui.toast', ($, e) => {
