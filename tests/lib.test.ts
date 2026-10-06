@@ -10,6 +10,7 @@ import { setLang } from '../hooks/lib/i18n'
 import { level, mood } from '../hooks/lib/pet'
 import { base64, bigText, DEFAULT, pack, ring, sprite, squares, toCells } from '../hooks/lib/pixels'
 import { PALETTE, bigCat, smallCat } from '../hooks/lib/sprites'
+import { barParts } from '../hooks/ui/parts'
 import { addToDay, dayKey, lastDays, streak } from '../hooks/lib/stats'
 import { detectCommand, isTestCommand, parseFailures, parseSummary, tail } from '../hooks/lib/tests'
 
@@ -33,6 +34,13 @@ describe('format', () => {
     expect(bar(1, 8).fill).toBe('▰')
     expect(bar(150, 4)).toEqual({ fill: '▰▰▰▰', rest: '' })
     expect(bar(50, 10).fill.length + bar(50, 10).rest.length).toBe(10)
+    // the band's bar: one glyph throughout, so it keeps its length in any font
+    for (const pct of [0, 1, 7, 15, 49, 50, 99, 100, 150]) {
+      const text = barParts(pct, 10).map(p => p.text).join('')
+      expect(text).toBe('█'.repeat(10))
+    }
+    expect(barParts(1, 10)[0]!.text).toBe('█')
+    expect(barParts(0, 10)).toHaveLength(1)
   })
 
   test('truncate, plural, sparkline, until', () => {

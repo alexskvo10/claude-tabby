@@ -116,8 +116,11 @@ export function drawBand(el: El, snap: Snapshot, props: BandProps, on: Handlers)
   const rowsWidth = Math.max(10, props.bodyColumns - (showCat ? CAT_COLUMNS + 1 : 0))
   const width = rowsWidth - 2
   const isWide = width >= 100
-  const barWidth = isWide ? 10 : width >= 76 ? 8 : 5
-  const limitBar = isWide ? 6 : width >= 86 ? 4 : 0
+  // one size at any usual width: a narrow band drops the minor blocks
+  // instead; only a band too narrow for the context block shortens its bar,
+  // and one too narrow for three bars draws the limits without theirs
+  const barWidth = Math.max(3, Math.min(10, width - 9))
+  const limitBar = width >= 70 ? 8 : 0
 
   const last = turns.history.at(-1)
   const catMood = mood({
@@ -152,7 +155,7 @@ export function drawBand(el: El, snap: Snapshot, props: BandProps, on: Handlers)
     const row = fit(
       present([
         textCat,
-        ctxSeg(usage, turns.history, 5, on),
+        ctxSeg(usage, turns.history, barWidth, on),
         compactHintSeg(usage),
         ...limitSegs(usage, samples, now, 0, on).filter(s => !s.id.startsWith('reset:')),
         working,

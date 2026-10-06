@@ -74,25 +74,19 @@ export function Line(el: El, parts: readonly Part[], key?: string): RenderElemen
   )
 }
 
-const EIGHTHS = ['', '▏', '▎', '▍', '▌', '▋', '▊', '▉']
-
 /**
- * A smooth bar: whole cells, then an eighth-cell edge, over a track, all in
- * one colour: `color`, else green → yellow → red by how full it is.
+ * A bar of whole cells, the filled ones in `color`, else green → yellow → red
+ * by how full it is, the rest in the track's colour. Every cell is the same
+ * glyph, so the bar keeps its length in a font that is not monospaced.
  */
 export function barParts(pct: number, width: number, color?: string): Part[] {
   const w = Math.max(1, Math.floor(width))
-  const eighths = Math.round((Math.min(100, Math.max(0, pct)) / 100) * w * 8)
-  const shown = pct > 0 && eighths === 0 ? 1 : eighths
-  const full = Math.floor(shown / 8)
-  const edge = shown % 8
-  const fill = color ?? heat(pct)
+  const clamped = Math.min(100, Math.max(0, pct))
+  const filled = clamped > 0 ? Math.max(1, Math.round((clamped / 100) * w)) : 0
   const out: Part[] = []
-  for (let i = 0; i < full; i += 1) out.push({ text: '█', color: fill, bg: C.track })
-  if (edge > 0 && full < w) out.push({ text: EIGHTHS[edge]!, color: fill, bg: C.track })
-  const rest = w - full - (edge > 0 ? 1 : 0)
-  if (rest > 0) out.push({ text: ' '.repeat(rest), bg: C.track })
-  return merge(out)
+  if (filled > 0) out.push({ text: '█'.repeat(filled), color: color ?? heat(pct), bg: C.track })
+  if (w > filled) out.push({ text: '█'.repeat(w - filled), color: C.track, bg: C.track })
+  return out
 }
 
 /** Joins neighbouring runs of one style, so a bar is a few elements, not one per cell. */
