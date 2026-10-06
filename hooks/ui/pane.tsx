@@ -810,7 +810,9 @@ function petTab({ el, snap, width, on }: Ctx): { tree: RenderElement; mood: Mood
   const tree = (
     <Box flexDirection="column" marginTop={1}>
       {Grid(el, width, [profile, opened, next])}
-      <Button key="pet-toggle" label={prefs.isPetShown ? L.pet.hide : L.pet.show} hotkey="p" onPress={() => on.togglePet()} />
+      <Box marginTop={1}>
+        <Button key="pet-toggle" label={prefs.isPetShown ? L.pet.hide : L.pet.show} hotkey="p" onPress={() => on.togglePet()} />
+      </Box>
     </Box>
   )
   return { tree, mood: m, hasCat }

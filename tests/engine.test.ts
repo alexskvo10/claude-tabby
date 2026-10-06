@@ -1,7 +1,7 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect } from 'claude-code/testing'
 
 import { lines } from './text'
-import { BAND, band, boot, card, command, GREEN, NOW, PANE, pane, RED, submit, turn, world } from './world'
+import { BAND, band, boot, card, command, GREEN, NOW, PANE, pane, RED, submit, test, turn, world } from './world'
 
 describe('band', () => {
   test('draws the session row and the work row on both surfaces', async ($, on) => {
@@ -9,7 +9,7 @@ describe('band', () => {
     await boot($, w)
     for (const surface of ['terminal', 'desktop'] as const) {
       const [session, work, intro] = await band($, 140, surface)
-      expect(session).toMatch(/ctx █+ 48% 96k\/200k {3,}5ч █+ 23% ↻ 2ч14м {3,}7д █+ 41% ↻ 3д4ч {3,}\$1\.24/)
+      expect(session).toMatch(/ctx █+ 48% 96k\/200k {3,}5ч █+ 23% {2}↻ 2ч14м {3,}7д █+ 41% {2}↻ 3д4ч {3,}\$1\.24/)
       // the cat is pixel art: cells on the terminal, SVG on the desktop
       expect(session).toStartWith('ctx')
       expect(session).toEndWith('≡')
@@ -64,6 +64,18 @@ describe('band', () => {
       expect(session).not.toMatch(/│/)
       // all three bars are one length
       expect(session!.match(/█+/g)!.map(m => m.length)).toEqual([10, 10, 10])
+    }
+  })
+
+  test('both reset times stay: the bars shorten together first', async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    for (const cols of [96, 104, 112, 140]) {
+      const [session] = await band($, cols)
+      expect(session, `${cols}`).toMatch(/5ч █+ 23% +↻ 2ч14м/)
+      expect(session, `${cols}`).toMatch(/7д █+ 41% +↻ 3д4ч/)
+      const bars = session!.match(/█+/g)!.map(m => m.length)
+      expect(new Set(bars).size, `${cols}: ${session}`).toBe(1)
     }
   })
 
@@ -131,6 +143,14 @@ describe('band', () => {
     expect(await ui.find({ type: 'Text', text: /Лимит 5ч: 23%/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /сброс в \d+:14 \(через 2ч 14м\)/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /2 изменённых файла/ })).toBeDefined()
+    // a card is as wide as its text: the pointer on it counts as on its block,
+    // so a card across the whole row stayed up wherever the pointer went
+    type N = { type: string; props?: Record<string, unknown>; children?: unknown[] }
+    const all = (n: unknown): N[] => (typeof n === 'object' && n !== null ? [n as N, ...((n as N).children ?? []).flatMap(all)] : [])
+    const textOf = (n: unknown): string => (typeof n === 'string' ? n : typeof n === 'object' && n !== null ? ((n as N).children ?? []).map(textOf).join('') : '')
+    const cards = all(await ui.drawn()).filter(n => n.type === 'Box' && n.props?.position === 'absolute' && n.props?.display === 'none')
+    const limitCard = cards.find(c => /Лимит 5ч/.test(textOf(c)))!
+    expect(limitCard.props!.width as number).toBeLessThan(80)
     await ui.unmount()
     // off the terminal a card is one text that wraps: its pieces are never cut one by one
     const desk = await $.ui.mount({ surface: 'desktop', ...BAND(140) })
@@ -194,7 +214,7 @@ describe('forecasts', () => {
     // 32 points in 20 minutes: 96%/h, 45% left, about 28 minutes, before the 2h reset
     const [session] = await band($, 160)
     // the band keeps the reset; the forecast is in the card, the toast and the pane
-    expect(session).toMatch(/5ч [█▏▎▍▌▋▊▉ ]+55% ↻ 1ч\d+м/)
+    expect(session).toMatch(/5ч █+ 55% {2}↻ 1ч\d+м/)
     expect(w.toasts.some(t => /При таком темпе лимит 5ч кончится через/.test(t))).toBe(true)
     expect(await pane($, w, 'overview')).toMatch(/⚠ лимит 5ч кончится раньше сброса/)
     expect(await card($, w, 'overview', 'card-limits')).toMatch(/55%\s+41%\n5ч\s+7д\n↻ 1ч\d+м\s+↻ 3д3ч\n⚠ 2\dм/)
@@ -269,7 +289,7 @@ describe('git', () => {
     w.pr = JSON.stringify({
       number: 12,
       title: 'Add the band',
-      url: 'https://github.com/alexskvo10/claude-tab/pull/12',
+      url: 'https://github.com/alexskvo10/claude-tabby/pull/12',
       state: 'OPEN',
       isDraft: false,
       statusCheckRollup: [{ status: 'COMPLETED', conclusion: 'SUCCESS' }, { state: 'SUCCESS' }],
@@ -503,7 +523,7 @@ describe('pane', () => {
     expect(await of('card-today')).toMatch(/СЕГОДНЯ\n1 ход/)
     await ui.press({ key: 'tab-git' })
     drawn = lines((await ui.drawn()) as never).join('\n')
-    expect(drawn).toMatch(/alexskvo10\/claude-tab/)
+    expect(drawn).toMatch(/alexskvo10\/claude-tabby/)
     expect(drawn).toMatch(/ M hooks\/register\.tsx/)
     expect(drawn).toMatch(/d7cb9a4 Initial commit/)
     await ui.press({ key: 'tab-pet' })
@@ -624,7 +644,7 @@ describe('settings', () => {
     const w = world(on)
     await boot($, w)
     const [session, work] = await band($, 140)
-    expect(session).toMatch(/ctx █+ 48% 96k\/200k {3,}5h █+ 23% ↻ 2h14m {3,}7d/)
+    expect(session).toMatch(/ctx █+ 48% 96k\/200k {3,}5h █+ 23% {2}↻ 2h14m {3,}7d/)
     expect(work).toBe('⎇ feature/band ↑1 ✚2')
     expect(await pane($, w, 'overview')).toMatch(/1: Overview\s+2: Git ✚2\s+3: Tasks\s+4: Tests\s+5: Tabby[\s\S]*✓ all calm/)
     expect(await command($, w, 'focus', 'ship it 30')).toBe('◎ Focus: "ship it" · 30 min.')

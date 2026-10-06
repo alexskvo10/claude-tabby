@@ -13,6 +13,7 @@ import { PALETTE, bigCat, smallCat } from '../hooks/lib/sprites'
 import { barParts } from '../hooks/ui/parts'
 import { addToDay, dayKey, lastDays, streak } from '../hooks/lib/stats'
 import { detectCommand, isTestCommand, parseFailures, parseSummary, tail } from '../hooks/lib/tests'
+import { readOptions } from '../hooks/state'
 
 describe('format', () => {
   test('tokens and spans read short', () => {
@@ -105,8 +106,8 @@ describe('git', () => {
       { hash: 'abc', at: 1_700_000_100_000, subject: 'fix: a\x1fb' },
     ])
     expect(parseLog('')).toEqual([])
-    expect(repoName('git@github.com:alexskvo10/claude-tab.git')).toBe('alexskvo10/claude-tab')
-    expect(repoName('https://github.com/alexskvo10/claude-tab')).toBe('alexskvo10/claude-tab')
+    expect(repoName('git@github.com:alexskvo10/claude-tabby.git')).toBe('alexskvo10/claude-tabby')
+    expect(repoName('https://github.com/alexskvo10/claude-tabby')).toBe('alexskvo10/claude-tabby')
     expect(repoName('http://local_proxy@127.0.0.1:1234/git/owner/repo')).toBe('owner/repo')
     expect(repoName(null)).toBeNull()
   })
@@ -238,6 +239,12 @@ describe('failures', () => {
 })
 
 describe('english', () => {
+  test('English unless Russian is chosen', () => {
+    expect(readOptions({}).language).toBe('en')
+    expect(readOptions({ language: 'ru' }).language).toBe('ru')
+    expect(readOptions({ language: 'fr' }).language).toBe('en')
+  })
+
   test('units and words follow the language', () => {
     setLang('en')
     try {

@@ -200,7 +200,9 @@ export function limitSegs(
     // the reset stays put; a forecast that it runs out first lives in the card
     if (left !== undefined) {
       // a space after the arrow: Windows Terminal's font draws it wider than a cell
-      segs.push({ id: `reset:${l.kind}`, group: `limit:${l.kind}`, rank: isPrimary ? 4 : 1, parts: [{ text: `↻ ${compact(left)}`, dim: true }], card })
+      // a wider gap than inside the group: in the desktop's font one space
+      // glued the reset to the percent; the 7d reset outranks the token count
+      segs.push({ id: `reset:${l.kind}`, group: `limit:${l.kind}`, rank: isPrimary ? 4 : 3, parts: [{ text: ` ↻ ${compact(left)}`, dim: true }], card })
     }
   })
   return segs

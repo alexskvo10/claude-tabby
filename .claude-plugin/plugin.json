@@ -1,12 +1,12 @@
 {
   "name": "tabby",
-  "version": "0.3.7",
+  "version": "0.4.0",
   "description": "A calm dashboard above the prompt: context and rate limits with forecasts, git and PR checks, tests, focus, a mini TODO and Tabby the cat",
   "types": "./types/index.d.ts",
   "author": {
     "name": "alexskvo10"
   },
-  "repository": "https://github.com/alexskvo10/claude-tab",
+  "repository": "https://github.com/alexskvo10/claude-tabby",
   "license": "MIT",
   "keywords": [
     "dashboard",
@@ -22,7 +22,7 @@
       "type": "string",
       "title": "Language / Язык",
       "description": "Interface language: ru or en",
-      "default": "ru",
+      "default": "en",
       "options": [
         "ru",
         "en"

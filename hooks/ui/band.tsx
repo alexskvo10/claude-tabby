@@ -65,8 +65,9 @@ function cardParts(card: readonly Part[], width: number): Part[] {
 
 /**
  * A card as one run of text, so it is cut, if at all, only at its end. The
- * terminal pads it to cover the row beneath; elsewhere the surface draws the
- * card on its own ground, and the text wraps rather than lose its end.
+ * terminal pads it to its width, covering the row beneath; elsewhere the
+ * surface draws the card on its own ground, and the text wraps rather than
+ * lose its end.
  */
 function Card(el: El, card: readonly Part[], width: number): RenderElement {
   const { Text } = el
@@ -105,10 +106,14 @@ function Row(el: El, segs: readonly Seg[], key: string, width: number, cardTop?:
       if (si > 0) text(' ')
       const left = offset
       offset += partsWidth(s.parts)
+      // as wide as its text, not the row, under its block (shifted left where
+      // the row runs out): the pointer on a card counts as on its block, so a
+      // full-width card stayed up wherever the pointer crossed
+      const cardWidth = s.card === undefined ? 0 : Math.min(width, partsWidth(s.card) + 2)
       const card =
         cardTop !== undefined && s.card !== undefined ? (
-          <Box position="absolute" top={cardTop} left={-left} width={width} display="none" hover={{ display: 'flex' }} flexDirection="row">
-            {Card(el, s.card, width)}
+          <Box position="absolute" top={cardTop} left={Math.min(0, width - cardWidth - left)} width={cardWidth} display="none" hover={{ display: 'flex' }} flexDirection="row">
+            {Card(el, s.card, cardWidth)}
           </Box>
         ) : null
       inner.push(
@@ -151,9 +156,9 @@ export function drawBand(el: El, snap: Snapshot, props: BandProps, on: Handlers)
   const rowsWidth = Math.max(10, props.bodyColumns - (showCat ? CAT_COLUMNS + 1 : 0))
   const width = rowsWidth - 2
   const isWide = width >= 100
-  // one size at any usual width: a narrow band drops the minor blocks
-  // instead; only a band too narrow for the context block shortens its bar,
-  // and one too narrow for three bars draws the limits without theirs
+  // one size at any usual width; a band too narrow for the context block
+  // shortens its bar, and one too narrow for three bars draws the limits
+  // without theirs (the session row below may shorten all three together)
   const barWidth = Math.max(3, Math.min(10, width - 9))
   // the limits' bars match the context's, so all three read on one scale
   const limitBar = width >= 70 ? barWidth : 0
@@ -213,19 +218,27 @@ export function drawBand(el: El, snap: Snapshot, props: BandProps, on: Handlers)
     return { tree, mood: catMood, hasCat: false }
   }
 
-  const session = fit(
-    present([
-      textCat,
-      ctxSeg(usage, turns.history, barWidth, on),
-      ctxLeftSeg(usage, turns.history),
-      ctxTokensSeg(usage),
-      compactHintSeg(usage),
-      ...limitSegs(usage, samples, now, limitBar, on),
-      snap.showCost ? costSeg(usage, turns.history, on) : null,
-    ]),
-    width,
-    measure,
-  )
+  // the resets matter more than long bars: all three bars shorten together
+  // (10, 8, 6) before a reset time leaves the row
+  const sessionAt = (bar: number, limit: number) =>
+    fit(
+      present([
+        textCat,
+        ctxSeg(usage, turns.history, bar, on),
+        ctxLeftSeg(usage, turns.history),
+        ctxTokensSeg(usage),
+        compactHintSeg(usage),
+        ...limitSegs(usage, samples, now, limit, on),
+        snap.showCost ? costSeg(usage, turns.history, on) : null,
+      ]),
+      width,
+      measure,
+    )
+  const resets = (usage?.limits ?? []).filter(l => l.resetsAt !== undefined).length
+  const hasResets = (row: readonly Seg[]) => row.filter(s => s.id.startsWith('reset:')).length >= resets
+  const session =
+    [10, 8, 6].filter(b => b <= barWidth).map(b => sessionAt(b, limitBar === 0 ? 0 : b)).find(hasResets) ??
+    sessionAt(barWidth, limitBar)
 
   const turnSegs = present([working ?? lastTurnSeg(last, turns.count, on), gitSeg(git, on), testsSeg(tests, now, on)])
   const taskSegs = present([

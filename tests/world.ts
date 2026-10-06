@@ -1,8 +1,8 @@
 // The world beneath the plugin for the engine tests: a repo, a session with
 // usage, a host that runs git, gh and tests, a store, a prompt box.
 import type { On } from 'claude-code'
-import { mock } from 'claude-code/testing'
-import type { Engine } from 'claude-code/testing'
+import { mock, test as engineTest } from 'claude-code/testing'
+import type { Engine, TestBody, TestOptions } from 'claude-code/testing'
 
 import { lines } from './text'
 
@@ -70,7 +70,7 @@ export function world(
   on('session.start', () => ({ cwd: '/repo' }))
   on('session.root', () => ({ value: '/repo' }))
   on('session.repo', () => ({
-    value: { root: '/repo', remote: 'git@github.com:alexskvo10/claude-tab.git', internal: false, name: null },
+    value: { root: '/repo', remote: 'git@github.com:alexskvo10/claude-tabby.git', internal: false, name: null },
   }))
   on('session.usage', () => ({
     value: w.isFresh
@@ -215,4 +215,13 @@ export async function card($: Engine, w: World, tab: string, key: string, cols =
   await ui.unmount()
   if (found === undefined) return ''
   return lines(found as never).join('\n')
+}
+
+/**
+ * `test`, with the suite's defaults: the strings it asserts are Russian, and
+ * a slow machine gets more than the engine's 5 s.
+ */
+export function test(name: string, a: TestOptions | TestBody, b?: TestBody): void {
+  const [given, body] = b === undefined ? [{} as TestOptions, a as TestBody] : [a as TestOptions, b]
+  engineTest(name, { timeoutMs: 15_000, ...given, options: { language: 'ru', ...given.options } }, body)
 }

@@ -1,135 +1,176 @@
-# Tabby: приборная панель для Claude Code
+<div align="center">
 
-Мод для Claude Code: две строки над полем ввода, панель-дашборд с пятью вкладками
-и живой пиксельный кот Таби, который моргает, виляет хвостом и «печатает», пока Claude работает.
+<img src="docs/tabby.svg" width="160" alt="Tabby, a pixel-art cat">
 
-![Плашка над вводом](docs/band.png)
+# Tabby
 
-| Обзор | Задачи и фокус | Таби |
-| --- | --- | --- |
-| ![Обзор](docs/overview.png) | ![Задачи](docs/tasks.png) | ![Таби](docs/tabby.png) |
+**A calm dashboard above the Claude Code prompt — and a pixel cat who keeps you company.**
 
-*Превью отрисованы из тех же деревьев элементов, что получает терминал. Шрифт и отступы
-в вашем терминале будут немного другими.*
+Context and rate limits with forecasts · git and PR checks · tests · focus timer · a TODO list Claude can read
 
-**Первая строка — сессия.**
-- Контекст: заполняющаяся полоса (цвет по заполнению) и прогноз, на сколько ходов его хватит при текущем темпе.
-- Лимиты 5ч и 7д: полоса и время до сброса. Если при таком темпе лимит кончится раньше сброса, об этом скажут уведомление и карточка при наведении.
-- Стоимость сессии.
+<p>
+  <img alt="Claude Code plugin" src="https://img.shields.io/badge/Claude_Code-plugin-D97757?style=flat-square">
+  <img alt="Version 0.4.0" src="https://img.shields.io/badge/version-0.4.0-3B4252?style=flat-square">
+  <img alt="71 tests" src="https://img.shields.io/badge/tests-71_passing-7FD4C1?style=flat-square">
+  <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-F4C7A1?style=flat-square">
+</p>
 
-**Вторая строка — работа.**
-- Ход: живой таймер или итог прошлого хода.
-- Git: ветка, PR и статус его проверок CI.
-- Тесты.
-- План Claude (его TodoWrite).
-- Фокус-помодоро.
-- Мини-TODO.
+**English** · [Русский](README.ru.md)
 
-**Пиксель-арт.** Кот, кольцевые датчики, тепловая карта и большие цифры таймера нарисованы
-полублоками `▀`: два квадратных пикселя на клетку. Это работает в любом терминале с truecolor,
-включая Windows Terminal. Анимация перерисовывает только клетки кота примерно 8 раз в секунду
-и останавливается, когда кота нет на экране. Её можно выключить: `/config` → tabby →
-Animate Tabby. В десктопном приложении, VS Code и на телефоне те же картинки рисуются в SVG:
-кот (анимация играет сама), кольца, тепловая карта и часы фокуса.
+<img src="docs/band.svg" width="100%" alt="The Tabby band above the prompt: context, limits, the live turn, git, tests, the plan and focus">
 
-## Как с ней работать
+</div>
 
-- **Наведите мышь на любой блок:** поверх соседней строки появится карточка с деталями. Например, для лимита: «Лимит 5ч: 47% · сброс в 14:14 (через 2ч 14м) · темп 18%/ч · закончится через 39м, раньше сброса».
-- **Кликните по подписи блока:** откроется его вкладка. Клик по `✗ 2 упало` впишет в поле ввода просьбу к Claude починить упавшие тесты (со списком), клик по `✓ 42/42` перезапустит тесты.
-- **Узкое окно:** менее важные блоки уходят первыми, строки не переносятся. `/tab compact` сворачивает плашку в одну строку.
-- **Цвет:** зелёный — норма, жёлтый — с 60%, красный — с 85%.
+> [!IMPORTANT]
+> Tabby is built on Claude Code **function hooks**, which are in early access. It needs a Claude Code build **2.1.289 or newer** with function hooks enabled. On other builds the plugin will not load.
 
-Карточки и клики работают там, где терминал передаёт мышь (полноэкранный режим) и в десктопном приложении.
+## Why
 
-## Панель
+You shouldn't have to ask Claude Code how much room is left. Tabby keeps the numbers that matter in two quiet rows above the prompt: how full the context is, when your limits reset, whether the tests are green and what you set out to do. One look, then back to work.
 
-Открывается командой `/tab` или кнопкой `≡`. `1`–`5` — вкладки, `Esc` — обратно к вводу. На вкладках видны значки того, что требует внимания (`Git ✚2`, `Тесты ✗`), внизу каждой — подсказка по клавишам.
+## A look around
 
-| Вкладка | Что внутри |
+<table>
+  <tr>
+    <td width="33%"><img src="docs/overview.svg" alt="Overview tab: context and limit rings, today, the session"></td>
+    <td width="33%"><img src="docs/tasks.svg" alt="Tasks tab: the focus clock, Claude's plan, your list"></td>
+    <td width="33%"><img src="docs/pet.svg" alt="Tabby tab: the cat, its level and achievements"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Overview</b><br><sub>context and limit rings, today, the session</sub></td>
+    <td align="center"><b>Tasks</b><br><sub>focus clock, Claude's plan, your list</sub></td>
+    <td align="center"><b>Tabby</b><br><sub>the cat, its level and achievements</sub></td>
+  </tr>
+</table>
+
+<sub>The pictures are drawn from the same element trees the terminal gets; your font and spacing will differ a little.</sub>
+
+## The band
+
+The blocks line up in columns, so the band reads like a small table.
+
+| Row | Blocks |
 | --- | --- |
-| **Обзор** | Строка «Сейчас», кольцо контекста с прогнозом, кольца лимитов со сбросом и темпом, «Сегодня» с серией дней и тепловой картой за 4 недели, сессия с историей ходов |
-| **Git** | Ветка, PR с проверками и ссылкой, изменённые файлы, поле коммита (Enter — `git add -A` и commit), Stash с подтверждением повторным нажатием (`s`), обновление (`r`) |
-| **Задачи** | Помодоро с большими пиксельными цифрами и полосой, план Claude по шагам, ваш список: `!` — важная, `*` — во всех проектах, клик отмечает, `c` убирает выполненные |
-| **Тесты** | Кольцо доли прошедших (красный остаток — упавшие), история прогонов, список упавших тестов (клик — попросить Claude починить этот), кнопка «починить все» (`f`), хвост вывода |
-| **Таби** | Большой анимированный пиксельный кот, уровень и опыт, серия дней, открытые достижения и ближайшие цели |
+| **Session** | **Context**: a bar, the fill and how many turns are left at the current pace · **5h and 7d limits**: a bar and the time to reset · the session **cost** |
+| **Work** | The **turn**: a live clock with the tool count, or how the last one went · **git**: branch, ahead/behind, changes, the PR and its CI checks · **tests** |
+| **Tasks** | **Claude's plan** (its TodoWrite) · your **focus** timer · your **TODO** list |
 
-## Команды
+- **Hover any block** for a card with the details, for example *Limit 5h: 50% · resets at 18:10 (in 1h 37m) · pace 12%/h · lasts until the reset*.
+- **Click a label** to open its tab. Clicking `✗ 2 failed` drafts a request for Claude to fix exactly those tests; clicking `✓ 42/42` runs them again.
+- **Colours** follow the fill: green, yellow from 60 %, red from 85 %.
+- **Narrow window?** The least important blocks step aside first; rows never wrap. `/tab compact` folds the band into one row.
+- **Every chat sees the same limits.** A chat hears of your limits only with its own replies, so Tabby shares the freshest reading between all your sessions.
 
-| Команда | Что делает |
+Hover cards and clicks need mouse reporting: full-screen mode in a terminal, or the desktop app.
+
+## The pane
+
+Open it with `/tab` or the `≡` button. `1`–`5` switch tabs, `Esc` goes back to the prompt. Tabs carry badges for what needs you (`Git ✚2`, `Tests ✗`).
+
+| Tab | What's inside |
 | --- | --- |
-| `/tab [overview\|git\|tasks\|tests\|pet]` | Открыть панель на вкладке |
-| `/tab compact` · `/tab hide-pet` | Плашка в одну строку · спрятать кота |
-| `/focus <цель> [минуты]` | Помодоро; `0` — без таймера; `/focus stop` — завершить |
-| `/todo <текст>` | Добавить задачу: `/todo !срочно`, `/todo *во всех проектах` |
-| `/todo done N` · `/todo rm N` | Отметить · удалить |
-| `/test [команда]` | Запустить тесты (команда определяется сама, своя запоминается для проекта) |
+| **Overview** | A "right now" line, the context ring with its forecast, limit rings with resets and pace, today with your streak and a four-week heat map, the session and its turns |
+| **Git** | Branch, PR with checks and a link, changed files, a commit box (`Enter` stages everything and commits), stash with a second press to confirm, refresh |
+| **Tasks** | A pomodoro with big pixel digits, Claude's plan step by step, your list: `!` important, `*` shared by all projects, click to tick, `c` clears done |
+| **Tests** | A pass-rate ring, run history, the failing tests (click one to ask Claude to fix it), *fix all*, the tail of the output |
+| **Tabby** | The big animated cat, level and XP, streak, achievements so far and what's next |
 
-Все команды работают и во время ответа Claude.
+## Commands
 
-## Настройки: `/config` → tabby
+| Command | What it does |
+| --- | --- |
+| `/tab [overview\|git\|tasks\|tests\|pet]` | Open the pane on a tab |
+| `/tab compact` · `/tab hide-pet` | One-row band · hide the cat |
+| `/focus <goal> [minutes]` | Start a pomodoro; `0` for no timer; `/focus stop` ends it |
+| `/todo <text>` | Add a task: `/todo !urgent`, `/todo *in every project` |
+| `/todo done N` · `/todo rm N` | Tick · remove |
+| `/test [command]` | Run the tests; the command is detected, and one you give is remembered for the project |
 
-| Настройка | По умолчанию | Что меняет |
+They all work while Claude is answering.
+
+## Settings
+
+`/config` → **tabby**
+
+| Setting | Default | What it changes |
 | --- | --- | --- |
-| Language / Язык | `ru` | Язык интерфейса: `ru` или `en` |
-| Animate Tabby | вкл. | Анимация пиксельного кота |
-| Palette | `dark` | Цвета для тёмного или светлого терминала |
-| Pomodoro minutes | 25 | Длина помодоро |
-| Context warning, % | 80 | С какого заполнения предупреждать о контексте |
-| Rate-limit warning, % | 80 | С какого расхода предупреждать о лимитах |
-| Run tests after Claude edits | выкл. | После хода с правками, где Claude не запускал тесты, запустить их |
-| Sound | вкл. | Мягкий сигнал, когда закончился долгий ход или помодоро |
-| Quiet mode | выкл. | Только важные уведомления |
-| Show cost | вкл. | Показывать стоимость |
+| Language | `en` | `en` or `ru` |
+| Animate Tabby | on | The pixel cat's animation |
+| Palette | `dark` | Colours for a dark or a light terminal |
+| Pomodoro minutes | 25 | Length of a focus session |
+| Context warning, % | 80 | When to warn about the context |
+| Rate-limit warning, % | 80 | When to warn about the limits |
+| Run tests after Claude edits | off | After a turn that edited files and ran no tests, run them |
+| Sound | on | A soft chime when a long turn or a pomodoro ends |
+| Quiet mode | off | Only the important toasts |
+| Show cost | on | Show the session cost |
 
-## Что видит Claude
+## Tabby the cat
 
-- **Инструмент `mcp__tabby__todo`.** Claude читает ваш список, добавляет пункты (в том числе важные и общие для всех проектов) и отмечает выполненные. Его пункты помечены `✦`.
-- **Цель фокуса и открытые задачи.** Они коротко прикладываются к вашему сообщению, только когда изменились. Системный промпт не трогается, кеш промпта не сбрасывается.
-- **Тесты, запущенные самим Claude.** Если Claude запускает тесты через Bash, результат тоже попадает в плашку. После `git push` и `gh pr` статус PR обновляется сразу.
+Tabby's mood follows the session. It purrs with its eyes shut in a smile (a heart now and then), peeks over a laptop and types while Claude works, looks sad at red tests, focuses with you, falls asleep after 15 idle minutes and beams at a new achievement. It earns XP for turns, green tests, finished tasks, pomodoros and 17 achievements. Its progress, your daily stats and your streak are kept between sessions.
 
-## Таби
+In terminals it is drawn in half blocks (`▀`), two square pixels per cell, in any truecolor terminal including Windows Terminal; only the cat's cells repaint, about eight times a second, and only while it is on screen. The desktop app, VS Code and the phone get the same pictures as SVG.
 
-Настроение кота отражает сессию: мурлычет (глаза-улыбки `^ ^`, иногда сердечко), во время хода печатает за ноутбуком, грустит при красных тестах, сосредоточен в фокусе, спит после 15 минут простоя, гордится новым достижением. Опыт копится за ходы, зелёные тесты, закрытые задачи, помодоро и 17 достижений. Прогресс, статистика по дням и серия дней подряд сохраняются между сессиями.
+## What Claude sees
 
-## Установка
+- **The `mcp__tabby__todo` tool.** Claude can read your list, add items (important ones too, or ones shared by all projects) and tick them off. Its items are marked `✦`.
+- **Your focus goal and open tasks**, attached briefly to your message only when they change. The system prompt is untouched, so the prompt cache stays warm.
+- **Tests Claude runs itself.** When Claude runs tests through Bash, the result shows in the band too. After `git push` or `gh pr`, the PR status refreshes at once.
 
-**Вариант 1 — плагином.** Работает после слияния в `main`:
+## What Tabby does on your machine
+
+Tabby runs code inside your Claude Code session, so here is everything it touches:
+
+- **Runs** `git` (status, log, commit, stash), `gh` (PR and checks, if installed and signed in) and your project's test command.
+- **Commits from the pane with the repository's git hooks off**, because that is how the engine runs git. Pre-commit checks will not run for those commits.
+- **Writes** its own store (progress, stats, settings, your list) in the Claude Code configuration directory, and `~/.claude/tabby-limits.json`, the limit reading it shares between your chats.
+- **Sends nothing anywhere.** No network calls of its own beyond `gh`.
+
+## Install
+
+**As a plugin**
+
 ```bash
-claude plugin marketplace add alexskvo10/claude-tab
+claude plugin marketplace add alexskvo10/claude-tabby
 claude plugin install tabby@tabby
 ```
 
-**Вариант 2 — из папки:**
+**From a folder**
+
 ```bash
-git clone https://github.com/alexskvo10/claude-tab ~/claude-tab
-claude --plugin-dir ~/claude-tab
+git clone https://github.com/alexskvo10/claude-tabby ~/claude-tabby
+claude --plugin-dir ~/claude-tabby
 ```
-Чтобы мод загружался всегда, добавьте в `~/.claude/settings.json`:
+
+To load it every time, add this to `~/.claude/settings.json`:
+
 ```json
-{ "env": { "CLAUDE_CODE_PLUGIN_DIRS": "/полный/путь/к/claude-tab" } }
+{ "env": { "CLAUDE_CODE_PLUGIN_DIRS": "/full/path/to/claude-tabby" } }
 ```
-Обновление: `git pull` в папке мода и перезапуск `claude`.
 
-Нужна сборка Claude Code 2.1.289 или новее (function hooks, early access).
-Для PR и CI нужен установленный и авторизованный `gh`; без него вкладка Git работает, только без PR.
+Update with `git pull` in the folder, then restart `claude`. In the desktop app, quit it fully (tray icon included) so it reads the new code.
 
-**Учтите:** коммит из панели выполняется с отключёнными git-хуками репозитория (так движок запускает git), поэтому pre-commit-проверки при нём не сработают.
+PR status and checks need the [`gh`](https://cli.github.com) CLI, installed and signed in. Without it the Git tab still works, just without the PR.
 
-## Разработка
+## Development
 
 ```bash
-claude plugin validate .   # манифест и модуль хуков глазами движка
-claude plugin test .       # 64 теста: утилиты, плашка, панель, команды, настройки
-tsc -p .                   # после первой загрузки движок кладёт типы в .claude-plugin/types/
+claude plugin validate .   # the manifest and the hooks module, as the engine sees them
+claude plugin test .       # 71 tests: helpers, the band, the pane, commands, settings
+tsc -p .                   # after a first load the engine puts its types in .claude-plugin/types/
 ```
 
 ```
-hooks/register.tsx   хуки, команды, инструмент, настройки; единственное место, где есть `$`
-hooks/actions.ts     логика: лимиты, ходы, git и PR, тесты, задачи, фокус, кот, статистика
-hooks/ui/            плашка (с карточками) и панель — чистые функции от снимка состояния
-hooks/lib/           форматирование, прогнозы, git, тесты, статистика, RU/EN,
-                     pixels.ts (полублоки, кольца, цифры), sprites.ts (кот), anim.ts (кадры)
-assets/chime.wav     сигнал
-types/index.d.ts     контракт состояния ($.state)
-tests/               тесты для `claude plugin test`
+hooks/register.tsx   hooks, commands, the tool, settings; the only place that touches `$`
+hooks/actions.ts     the logic: limits, turns, git and PRs, tests, tasks, focus, the cat, stats
+hooks/ui/            the band (with its cards) and the pane: pure functions of a state snapshot
+hooks/lib/           formatting, forecasts, git, tests, stats, i18n (en/ru),
+                     pixels.ts (half blocks, rings, digits), sprites.ts (the cat), anim.ts (frames)
+assets/chime.wav     the chime
+types/index.d.ts     the state contract ($.state)
+tests/               tests for `claude plugin test`
 ```
+
+## License
+
+[MIT](LICENSE). Tabby is an independent community plugin. It is not made, endorsed or supported by Anthropic.

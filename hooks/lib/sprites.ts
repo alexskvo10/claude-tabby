@@ -2,7 +2,7 @@
 //   O fur   D outline   L light belly   K eye   W eye shine   P nose/pink
 //   Z, z sleep   T tear   Y sparkle   S screen   G screen glow
 //   E darker fur (a shut eye)   B blush   R inner ear
-//   H heart   X laptop lid   N keyboard
+//   H heart   X laptop lid   N its edge
 import type { Rgb, Sprite } from './pixels'
 import { rgb, sprite } from './pixels'
 
@@ -67,19 +67,20 @@ export type Mood = 'happy' | 'work' | 'sad' | 'sleep' | 'proud' | 'focus'
 const SMILE = { 2: '..D...D....', 3: '.D.D.D.D...' }
 const HEART = { 0: '........H.H', 1: '.........H.' }
 
-// Working: a laptop under the chin, eyes reading along the lines, paws typing.
-const LAPTOP = '.XXXXGXXX..'
-const PAWS_A = '.LNNNNNL...'
-const PAWS_B = '.NLNNNLN...'
+// Working: peeking over an open laptop seen from behind (its lid, a glowing
+// mark), eyes reading along the lines, a paw on each corner tapping in turn.
+const LID_A = '.LXXXXXXX..'
+const LID_B = '.XXXXXXXL..'
+const LID = '.XXXXGXXX..'
 
 const SMALL_FRAMES: Record<Mood, readonly (readonly string[])[]> = {
   // the anim shows the heart for a moment now and then
   happy: [head('OO', SMILE), head('OO', { ...SMILE, ...HEART })],
   work: [
-    head(EYES_OPEN, { 4: LAPTOP, 5: PAWS_A }),
-    head(EYES_OPEN, { 4: LAPTOP, 5: PAWS_B }),
-    head(EYES_LEFT, { 4: LAPTOP, 5: PAWS_A }),
-    head(EYES_LEFT, { 4: LAPTOP, 5: PAWS_B }),
+    head(EYES_OPEN, { 4: LID_A, 5: LID }),
+    head(EYES_OPEN, { 4: LID_B, 5: LID }),
+    head(EYES_LEFT, { 4: LID_A, 5: LID }),
+    head(EYES_LEFT, { 4: LID_B, 5: LID }),
   ],
   sad: [head(EYES_OPEN, { 4: '.T....T....' }), head(EYES_OPEN, { 5: '.T....T....' })],
   sleep: [
@@ -130,6 +131,15 @@ function big(face: Face, extra: Record<number, string> = {}): string[] {
 }
 
 const OPEN = { e: 'KK', f: 'KW' }
+
+/** The back of an open laptop's lid, a glowing mark in its middle. */
+const LAPTOP_BIG: Record<number, string> = {
+  11: '..XXXXXXXXXXXXXX....',
+  12: '..XXXXXXGGXXXXXX....',
+  13: '..XXXXXXGGXXXXXX....',
+  14: '..XXXXXXXXXXXXXX....',
+  15: '..NNNNNNNNNNNNNN....',
+}
 const SHUT = { e: 'OO', f: 'DD' }
 
 const BIG_FRAMES: Record<Mood, readonly (readonly string[])[]> = {
@@ -139,9 +149,10 @@ const BIG_FRAMES: Record<Mood, readonly (readonly string[])[]> = {
     big({ ...OPEN, n: 'P', m: 'D', tail: 0 }),
     big({ ...SHUT, n: 'P', m: 'D', tail: 1 }),
   ],
+  // over the lid of an open laptop: one paw rests on its edge, the other taps
   work: [
-    big({ e: 'OK', f: 'KW', n: 'P', m: 'D', tail: 0 }, { 13: '...SSSSSSSSSS', 14: '...SGGGGGGGGS', 15: '...SSSSSSSSSS' }),
-    big({ e: 'KO', f: 'WK', n: 'P', m: 'D', tail: 1 }, { 13: '...SSSSSSSSSS', 14: '...SGGGGGGGGS', 15: '...SSSSSSSSSS' }),
+    big({ e: 'OK', f: 'KW', n: 'P', m: 'D', tail: 0 }, { ...LAPTOP_BIG, 10: '..NNLLNNNNNNLLNN....' }),
+    big({ e: 'KO', f: 'WK', n: 'P', m: 'D', tail: 1 }, { ...LAPTOP_BIG, 9: '....LL..............', 10: '..NNNNNNNNNNLLNN....' }),
   ],
   sad: [big({ ...OPEN, n: 'P', m: 'D', tail: 0 }, { 7: '....T' }), big({ ...OPEN, n: 'P', m: 'D', tail: 0 }, { 8: '....T' })],
   sleep: [

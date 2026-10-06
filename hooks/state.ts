@@ -33,7 +33,7 @@ export type Options = {
 }
 
 export const DEFAULT_OPTIONS: Options = {
-  language: 'ru',
+  language: 'en',
   theme: 'dark',
   pomodoroMinutes: 25,
   warnContext: 80,
@@ -52,7 +52,7 @@ export function readOptions(raw: Readonly<Record<string, unknown>> | undefined):
     typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : d
   const bool = (v: unknown, d: boolean) => (typeof v === 'boolean' ? v : d)
   return {
-    language: o.language === 'en' ? 'en' : 'ru',
+    language: o.language === 'ru' ? 'ru' : 'en',
     theme: o.theme === 'light' ? 'light' : 'dark',
     pomodoroMinutes: num(o.pomodoroMinutes, 25, 1, 180),
     warnContext: num(o.warnContext, 80, 50, 99),
