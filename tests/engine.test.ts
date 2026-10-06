@@ -57,13 +57,29 @@ describe('band', () => {
     await turn($, w, 34_000, 3)
     for (const surface of ['terminal', 'desktop'] as const) {
       const [session, work, tasks] = await band($, 120, surface)
-      // the second column: the 5h limit, git and the list start in one place
-      const at = Array.from(session!).join('').indexOf('5ч')
-      expect(work!.indexOf('⎇'), surface).toBe(at)
-      expect(tasks!.indexOf('☐'), surface).toBe(at)
       expect(session).not.toMatch(/│/)
       // all three bars are one length
       expect(session!.match(/█+/g)!.map(m => m.length)).toEqual([10, 10, 10])
+      if (surface === 'terminal') {
+        // the second column: the 5h limit, git and the list start in one place
+        const at = Array.from(session!).join('').indexOf('5ч')
+        expect(work!.indexOf('⎇'), surface).toBe(at)
+        expect(tasks!.indexOf('☐'), surface).toBe(at)
+      } else {
+        // a proportional font outgrows a box of monospace cells: no columns,
+        // just room between the blocks
+        expect(session).toMatch(/\S {3}5ч █/)
+        expect(work).toMatch(/\S {3}⎇/)
+      }
+    }
+    // off the terminal the full-height bars get a row of room under them
+    type N = { type: string; props?: Record<string, unknown>; children?: unknown[] }
+    const all = (n: unknown): N[] => (typeof n === 'object' && n !== null ? [n as N, ...((n as N).children ?? []).flatMap(all)] : [])
+    for (const surface of ['terminal', 'desktop'] as const) {
+      const ui = await $.ui.mount({ surface, ...BAND(120) })
+      const boxes = all(await ui.drawn()).filter(n => n.type === 'Box')
+      expect(boxes.some(n => n.props?.rowGap === 1), surface).toBe(surface === 'desktop')
+      await ui.unmount()
     }
   })
 

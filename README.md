@@ -10,7 +10,7 @@ Context and rate limits with forecasts · git and PR checks · tests · focus ti
 
 <p>
   <img alt="Claude Code plugin" src="https://img.shields.io/badge/Claude_Code-plugin-D97757?style=flat-square">
-  <img alt="Version 0.4.0" src="https://img.shields.io/badge/version-0.4.0-3B4252?style=flat-square">
+  <img alt="Version 0.4.1" src="https://img.shields.io/badge/version-0.4.1-3B4252?style=flat-square">
   <img alt="71 tests" src="https://img.shields.io/badge/tests-71_passing-7FD4C1?style=flat-square">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-F4C7A1?style=flat-square">
 </p>
@@ -47,7 +47,7 @@ You shouldn't have to ask Claude Code how much room is left. Tabby keeps the num
 
 ## The band
 
-The blocks line up in columns, so the band reads like a small table.
+In a terminal the blocks line up in columns, so the band reads like a small table; the desktop app draws it in a proportional font, with room between the blocks and the rows.
 
 | Row | Blocks |
 | --- | --- |

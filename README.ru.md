@@ -10,7 +10,7 @@
 
 <p>
   <img alt="Плагин Claude Code" src="https://img.shields.io/badge/Claude_Code-plugin-D97757?style=flat-square">
-  <img alt="Версия 0.4.0" src="https://img.shields.io/badge/version-0.4.0-3B4252?style=flat-square">
+  <img alt="Версия 0.4.1" src="https://img.shields.io/badge/version-0.4.1-3B4252?style=flat-square">
   <img alt="71 тест" src="https://img.shields.io/badge/tests-71_passing-7FD4C1?style=flat-square">
   <img alt="Лицензия MIT" src="https://img.shields.io/badge/license-MIT-F4C7A1?style=flat-square">
 </p>
@@ -47,7 +47,7 @@
 
 ## Плашка
 
-Блоки стоят в колонках, поэтому плашка читается как маленькая таблица.
+В терминале блоки стоят в колонках, поэтому плашка читается как маленькая таблица; десктопное приложение рисует её пропорциональным шрифтом, с промежутками между блоками и строками.
 
 | Строка | Блоки |
 | --- | --- |
