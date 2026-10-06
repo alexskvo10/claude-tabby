@@ -33,7 +33,9 @@ export function pixelSvg(steps: readonly Step[], scale: number): string {
   const first = steps[0]!.sprite
   const w = first.w * scale
   const h = first.h * scale
-  const head = `<svg ${NS} viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" shape-rendering="crispEdges">`
+  // in the desktop's sandboxed frame a colour scheme unlike the app's paints
+  // the frame white; following the user's keeps it transparent
+  const head = `<svg ${NS} viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" shape-rendering="crispEdges" style="color-scheme: light dark; background: transparent">`
   if (steps.length === 1) return `${head}${rects(first, scale)}</svg>`
   const total = steps.reduce((sum, s) => sum + s.ms, 0)
   let at = 0

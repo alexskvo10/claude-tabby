@@ -22,7 +22,6 @@ import type { Part, Seg } from '../lib/layout'
 import { SEPARATOR } from '../lib/layout'
 import { cycle, frameAt } from '../lib/anim'
 import type { Mood } from '../lib/pet'
-import { along, css, rgb } from '../lib/pixels'
 import { bigCat, smallCat } from '../lib/sprites'
 import { pixelSvg } from '../lib/svg'
 import type { Handlers } from '../snapshot'
@@ -78,9 +77,8 @@ export function Line(el: El, parts: readonly Part[], key?: string): RenderElemen
 const EIGHTHS = ['', '▏', '▎', '▍', '▌', '▋', '▊', '▉']
 
 /**
- * A smooth bar: whole cells, then an eighth-cell edge, over a track. Filled
- * cells run along green → yellow → red by where they sit (so a full bar
- * reddens at its end), or in one `color` for progress.
+ * A smooth bar: whole cells, then an eighth-cell edge, over a track, all in
+ * one colour: `color`, else green → yellow → red by how full it is.
  */
 export function barParts(pct: number, width: number, color?: string): Part[] {
   const w = Math.max(1, Math.floor(width))
@@ -88,11 +86,10 @@ export function barParts(pct: number, width: number, color?: string): Part[] {
   const shown = pct > 0 && eighths === 0 ? 1 : eighths
   const full = Math.floor(shown / 8)
   const edge = shown % 8
-  const stops = [rgb(C.green), rgb(C.yellow), rgb(C.red)]
-  const tint = (i: number) => color ?? css(along(stops, w <= 1 ? 0 : i / (w - 1)))
+  const fill = color ?? heat(pct)
   const out: Part[] = []
-  for (let i = 0; i < full; i += 1) out.push({ text: '█', color: tint(i), bg: C.track })
-  if (edge > 0 && full < w) out.push({ text: EIGHTHS[edge]!, color: tint(full), bg: C.track })
+  for (let i = 0; i < full; i += 1) out.push({ text: '█', color: fill, bg: C.track })
+  if (edge > 0 && full < w) out.push({ text: EIGHTHS[edge]!, color: fill, bg: C.track })
   const rest = w - full - (edge > 0 ? 1 : 0)
   if (rest > 0) out.push({ text: ' '.repeat(rest), bg: C.track })
   return merge(out)
@@ -167,7 +164,7 @@ export function compactHintSeg(u: TabUsage | null): Seg | null {
   return { id: 'compact', group: 'ctx', rank: 9, parts: [{ text: '⚠ /compact', color: C.red, bold: true }] }
 }
 
-/** One segment per rate-limit window, with its reset and, when it will run out first, a warning. */
+/** One segment per rate-limit window, with its reset; the card says if it runs out first. */
 export function limitSegs(
   u: TabUsage | null,
   samples: readonly TabLimitSample[],
@@ -206,15 +203,8 @@ export function limitSegs(
       ],
       card,
     })
-    if (b?.runsOutInMs !== undefined) {
-      segs.push({
-        id: `pace:${l.kind}`,
-        group: `limit:${l.kind}`,
-        rank: isPrimary ? 8.5 : 7.5,
-        parts: [{ text: `⚠ ${L.band.runsOut(compact(b.runsOutInMs))}`, color: C.red }],
-        card,
-      })
-    } else if (left !== undefined) {
+    // the reset stays put; a forecast that it runs out first lives in the card
+    if (left !== undefined) {
       // a space after the arrow: Windows Terminal's font draws it wider than a cell
       segs.push({ id: `reset:${l.kind}`, group: `limit:${l.kind}`, rank: isPrimary ? 4 : 1, parts: [{ text: `↻ ${compact(left)}`, dim: true }], card })
     }
@@ -384,5 +374,17 @@ export function CatSvg(el: El, key: string, m: Mood, size: 'small' | 'big', now:
     ? cycle(m, size).map(s => ({ sprite: draw(m, s.frame), ms: s.ms }))
     : [{ sprite: draw(m, frameAt(m, now, size)), ms: 1 }]
   const isLoop = steps.length > 1
-  return <Svg key={key} source={pixelSvg(steps, size === 'small' ? 9 : 8)} alt={L.pet.moods[m]} {...(isLoop ? { isInteractive: true } : {})} />
+  const scale = 8
+  const first = steps[0]!.sprite
+  // a frame given no size takes the browser's default one, far larger than the cat
+  return (
+    <Svg
+      key={key}
+      source={pixelSvg(steps, scale)}
+      alt={L.pet.moods[m]}
+      width={first.w * scale}
+      height={first.h * scale}
+      {...(isLoop ? { isInteractive: true } : {})}
+    />
+  )
 }

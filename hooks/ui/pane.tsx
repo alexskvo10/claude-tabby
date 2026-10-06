@@ -131,7 +131,7 @@ function Gauge(
     return <Svg key={key} source={source} alt={`${label} · ${percent(pct)}`} />
   }
   if (Raster === undefined) return Line(el, [...barParts(pct, fallbackWidth, color), { text: ` ${label}`, color: color ?? heat(pct), bold: true }])
-  const stops = color !== undefined ? [rgb(color)] : [rgb(C.green), rgb(C.yellow), rgb(C.red)]
+  const stops = [rgb(color ?? heat(pct))]
   const rows = Math.ceil(size / 2)
   const textWidth = Array.from(label).length
   return (

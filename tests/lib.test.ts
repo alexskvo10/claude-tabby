@@ -294,6 +294,22 @@ describe('pixels', () => {
     expect(half.px[6 * 12 + 1]).toBe(9)
     // the middle is a hole
     expect(half.px[6 * 12 + 6]).toBeNull()
+    // the ring is a mirror image left to right and top to bottom, at every size
+    for (const size of [10, 12]) {
+      const shape = ring(0, size, [1], 9).px.map(p => p !== null)
+      for (let y = 0; y < size; y += 1) {
+        for (let x = 0; x < size; x += 1) {
+          expect(shape[y * size + x]).toBe(shape[y * size + size - 1 - x]!)
+          expect(shape[y * size + x]).toBe(shape[(size - 1 - y) * size + x]!)
+        }
+      }
+      // any use at all shows the whole depth of the twelve o'clock column
+      const tiny = ring(1, size, [1], 9)
+      const column = Math.ceil((size - 1) / 2)
+      const lit = tiny.px.flatMap((p, i) => (p === 1 ? [i] : []))
+      expect(lit.length).toBeGreaterThanOrEqual(2)
+      expect(lit.every(i => i % size === column)).toBe(true)
+    }
   })
 
   test('digits, squares and the cat have the sizes the drawings count on', () => {

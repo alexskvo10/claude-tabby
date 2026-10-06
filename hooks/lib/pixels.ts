@@ -95,29 +95,28 @@ export function toCells(s: Sprite): Cells {
 
 /**
  * A ring gauge `size` pixels across, filled clockwise from the top to `pct`;
- * the filled arc runs through `stops` as it goes, the rest in `track`.
+ * the filled arc runs through `stops` as it goes, the rest in `track`. The
+ * band is `band` pixels deep at any size, so the hole stays round.
  */
-export function ring(pct: number, size: number, stops: readonly Rgb[], track: Rgb, thickness = 0.28): Sprite {
-  const px: (Rgb | null)[] = []
+export function ring(pct: number, size: number, stops: readonly Rgb[], track: Rgb, band = 2.6): Sprite {
   const c = (size - 1) / 2
-  const outer = size / 2
-  const inner = outer * (1 - thickness * 2)
-  const fill = Math.min(100, Math.max(0, pct)) / 100
+  const outer = size / 2 - 0.15
+  const inner = outer - band
+  const angles: (number | null)[] = []
   for (let y = 0; y < size; y += 1) {
     for (let x = 0; x < size; x += 1) {
       const dx = x - c
       const dy = y - c
       const d = Math.sqrt(dx * dx + dy * dy)
-      if (d > outer - 0.15 || d < inner) {
-        px.push(null)
-        continue
-      }
       // clockwise from twelve o'clock, 0..1
-      const a = (Math.atan2(dx, -dy) / (2 * Math.PI) + 1) % 1
-      px.push(a <= fill && fill > 0 ? along(stops, a) : track)
+      angles.push(d > outer || d < inner ? null : (Math.atan2(dx, -dy) / (2 * Math.PI) + 1) % 1)
     }
   }
-  return { w: size, h: size, px }
+  // any use at all shows: at least the column at twelve o'clock, all its depth
+  const top = Math.ceil(c)
+  const first = Math.max(...angles.filter((a, i) => a !== null && i % size === top && i < size * c) as number[])
+  const fill = pct <= 0 ? -1 : Math.max(first, Math.min(100, pct) / 100)
+  return { w: size, h: size, px: angles.map(a => (a === null ? null : a <= fill ? along(stops, a) : track)) }
 }
 
 // ---------------------------------------------------------------- heat map

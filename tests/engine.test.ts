@@ -70,8 +70,13 @@ describe('band', () => {
     await $.turn.start({ text: 'go', turnId: 'live' })
     for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
       const ui = await $.ui.mount({ surface, ...BAND(140, true) })
-      const cat = (await ui.find({ type: 'Svg' })) as unknown as { props: { source: string; alt: string; isInteractive?: boolean } } | undefined
+      const cat = (await ui.find({ type: 'Svg' })) as unknown as
+        | { props: { source: string; alt: string; isInteractive?: boolean; width?: number; height?: number } }
+        | undefined
       expect(cat, surface).toBeDefined()
+      // a frame with no size of its own grows far past the band's three rows
+      expect(cat!.props).toMatchObject({ width: 88, height: 48 })
+      expect(cat!.props.source).toContain('color-scheme')
       expect(cat!.props.alt).toBe('помогает')
       expect(cat!.props.source).toStartWith('<svg')
       expect(cat!.props.source).toContain('<animate')
@@ -164,7 +169,8 @@ describe('forecasts', () => {
     }
     // 32 points in 20 minutes: 96%/h, 45% left, about 28 minutes, before the 2h reset
     const [session] = await band($, 160)
-    expect(session).toMatch(/5ч [█▏▎▍▌▋▊▉ ]+55% ⚠ хватит на 2\dм/)
+    // the band keeps the reset; the forecast is in the card, the toast and the pane
+    expect(session).toMatch(/5ч [█▏▎▍▌▋▊▉ ]+55% ↻ 1ч\d+м/)
     expect(w.toasts.some(t => /При таком темпе лимит 5ч кончится через/.test(t))).toBe(true)
     expect(await pane($, w, 'overview')).toMatch(/⚠ лимит 5ч кончится раньше сброса/)
     expect(await card($, w, 'overview', 'card-limits')).toMatch(/55%\s+41%\n5ч\s+7д\n↻ 1ч\d+м\s+↻ 3д3ч\n⚠ 2\dм/)
