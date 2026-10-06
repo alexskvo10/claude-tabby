@@ -101,10 +101,11 @@ function Card(
   )
 }
 
+/** Cards side by side where they fit, with a blank row between rows of them. */
 function Grid(el: El, width: number, cards: readonly (RenderElement | null)[]): RenderElement {
   const { Box } = el
   return (
-    <Box flexDirection="row" flexWrap="wrap" columnGap={1} width={width}>
+    <Box flexDirection="row" flexWrap="wrap" columnGap={1} rowGap={1} width={width}>
       {cards.filter((c): c is RenderElement => c !== null)}
     </Box>
   )
