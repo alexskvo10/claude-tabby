@@ -114,11 +114,12 @@ const BODY = [
 ]
 
 // The tail rises from the hip and swishes: upright, curled right, hooked low.
-// Rows 9-14, right of the hip; its root stays put so it swings, not jumps.
+// It shares the flank's outline and its root opens into the body, so it reads
+// as part of the cat; the root stays put so it swings, not jumps.
 const TAILS = {
-  up: { 9: '.................D', 10: '................DOD', 11: '................DOD', 12: '................DOD', 13: '.................OD', 14: '................DD' },
-  right: { 9: '..................DD', 10: '.................DOD', 11: '................DOD.', 12: '................DOD', 13: '.................OD', 14: '................DD' },
-  hook: { 10: '.................DDD', 11: '................DOOD', 12: '................DODD', 13: '.................OD', 14: '................DD' },
+  up: { 8: '.................D', 9: '................DOD', 10: '................DOD', 11: '................OD', 12: '................OD', 13: '................OD', 14: '................D' },
+  right: { 9: '.................DDD', 10: '................DOOD', 11: '................ODD', 12: '................OD', 13: '................OD', 14: '................D' },
+  hook: { 10: '................DDDD', 11: '................OOOD', 12: '................ODDD', 13: '................OD', 14: '................D' },
 } satisfies Record<string, Record<number, string>>
 
 type Face = { e: string; f: string; n: string; m: string; tail: keyof typeof TAILS }
