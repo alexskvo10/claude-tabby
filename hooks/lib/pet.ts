@@ -89,7 +89,7 @@ export function achievements(): Achievement[] {
 }
 
 export const NEW_PET: TabPet = {
-  name: 'Таби',
+  name: 'Табби',
   xp: 0,
   achievements: [],
   lastUnlock: null,

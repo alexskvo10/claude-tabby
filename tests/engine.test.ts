@@ -517,7 +517,7 @@ describe('pane', () => {
     for (const tab of ['overview', 'git', 'tasks', 'tests', 'pet']) {
       for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const) {
         const drawn = (await pane($, w, tab, 56, surface)).split('\n')
-        expect(drawn[0], `${tab} ${surface}`).toMatch(/1: Обзор\s+2: Git ✚2\s+3: Задачи 1\s+4: Тесты ✗\s+5: Таби/)
+        expect(drawn[0], `${tab} ${surface}`).toMatch(/1: Обзор\s+2: Git ✚2\s+3: Задачи 1\s+4: Тесты ✗\s+5: Табби/)
         expect(drawn.at(-1)!.length, `${tab} ${surface}: the key hint`).toBeGreaterThan(10)
       }
     }
