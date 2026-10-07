@@ -1,5 +1,6 @@
 import { describe, expect } from 'claude-code/testing'
 
+import { VERSION } from '../hooks/lib/about'
 import { lines } from './text'
 import { BAND, band, boot, card, command, GREEN, NOW, PANE, pane, RED, submit, test, turn, world } from './world'
 
@@ -546,6 +547,20 @@ describe('pane', () => {
     expect(await of('card-tabby')).toMatch(/УРОВЕНЬ \d/)
     expect(await of('card-unlocked')).toMatch(/★ Первый шаг/)
     await ui.unmount()
+  })
+
+  test('the Tabby tab ends with the version and the repo, a row of room above', async ($, on) => {
+    const w = world(on)
+    await boot($, w)
+    for (const surface of ['terminal', 'desktop'] as const) {
+      const drawn = (await pane($, w, 'pet', 100, surface)).split('\n')
+      const at = drawn.findIndex(l => l.includes(`Tabby ${VERSION} · github.com/alexskvo10/claude-tabby`))
+      expect(at, surface).toBe(drawn.length - 1)
+      expect(drawn[at - 1]!.trim(), surface).toBe('')
+      expect(drawn[at - 2], surface).toMatch(/^p спрятать или показать в плашке/)
+    }
+    // on that tab only
+    expect(await pane($, w, 'overview')).not.toMatch(/claude-tabby/)
   })
 
   test('the accent line sits under the open tab, as wide as the tab', async ($, on) => {

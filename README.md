@@ -10,7 +10,7 @@ Context and rate limits with forecasts · git and PR checks · tests · focus ti
 
 <p>
   <img alt="Claude Code plugin" src="https://img.shields.io/badge/Claude_Code-plugin-D97757?style=flat-square">
-  <img alt="Version 0.4.5" src="https://img.shields.io/badge/version-0.4.5-3B4252?style=flat-square">
+  <img alt="Version 0.4.6" src="https://img.shields.io/badge/version-0.4.6-3B4252?style=flat-square">
   <img alt="72 tests" src="https://img.shields.io/badge/tests-72_passing-7FD4C1?style=flat-square">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-F4C7A1?style=flat-square">
 </p>

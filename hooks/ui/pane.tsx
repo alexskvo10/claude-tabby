@@ -5,6 +5,7 @@
 import type { RenderElement } from 'claude-code'
 
 import type { TabId } from '../../types'
+import { REPO, VERSION } from '../lib/about'
 import { frameAt } from '../lib/anim'
 import { CAT_PNG } from '../lib/cat-png'
 import {
@@ -191,7 +192,7 @@ function heatmap(el: El, values: readonly number[]): RenderElement[] {
 export type PaneDrawn = { tree: RenderElement; mood: Mood; hasCat: boolean }
 
 export function drawPane(el: El, snap: Snapshot, bodyColumns: number, hasInput: boolean, on: Handlers): PaneDrawn {
-  const { Box, Button, Text } = el
+  const { Box, Button, Link, Text } = el
   const tab = snap.prefs.tab
   const width = Math.max(24, bodyColumns)
   const ctx: Ctx = { el, snap, width, hasInput, on }
@@ -258,6 +259,14 @@ export function drawPane(el: El, snap: Snapshot, bodyColumns: number, hasInput: 
       <Text dimColor wrap="wrap">
         {L.hint[tab]}
       </Text>
+      {/* the Tabby tab ends with which version this is and where it lives:
+          one quiet line under the keys, a row of room above */}
+      {tab === 'pet' ? (
+        <Box marginTop={1} flexDirection="row">
+          <Text dimColor>{`Tabby ${VERSION} · `}</Text>
+          <Link href={REPO} label={REPO.replace('https://', '')} />
+        </Box>
+      ) : null}
     </Box>
   )
   return { tree, mood: paneMood, hasCat }
