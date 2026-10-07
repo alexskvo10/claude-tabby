@@ -24,7 +24,8 @@ import {
 } from '../lib/format'
 import { burn, contextGrowth, turnsLeft } from '../lib/forecast'
 import { fileTone } from '../lib/git'
-import { L } from '../lib/i18n'
+import { L, lang } from '../lib/i18n'
+import type { Lang } from '../lib/i18n'
 import type { Part } from '../lib/layout'
 import { achievements, art, level, mood, XP } from '../lib/pet'
 import type { Mood } from '../lib/pet'
@@ -259,12 +260,17 @@ export function drawPane(el: El, snap: Snapshot, bodyColumns: number, hasInput: 
       <Text dimColor wrap="wrap">
         {L.hint[tab]}
       </Text>
-      {/* the Tabby tab ends with which version this is and where it lives:
-          one quiet line under the keys, a row of room above */}
+      {/* the Tabby tab ends with which version this is, where it lives and
+          the language, the one in use lit: one quiet line under the keys */}
       {tab === 'pet' ? (
         <Box marginTop={1} flexDirection="row">
           <Text dimColor>{`Tabby ${VERSION} · `}</Text>
           <Link href={REPO} label={REPO.replace('https://', '')} />
+          <Text dimColor>{' · '}</Text>
+          {(['en', 'ru'] as const satisfies readonly Lang[]).flatMap((l, i) => [
+            ...(i > 0 ? [<Text dimColor>{' | '}</Text>] : []),
+            <Button key={`lang-${l}`} label={l.toUpperCase()} plain dimColor={lang() !== l} onPress={() => on.setLanguage(l)} />,
+          ])}
         </Box>
       ) : null}
     </Box>

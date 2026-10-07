@@ -15,6 +15,7 @@ import type {
   TabTurns,
   TabUsage,
 } from '../types'
+import type { Lang } from './lib/i18n'
 
 export type Snapshot = {
   usage: TabUsage | null
@@ -55,4 +56,5 @@ export type Handlers = {
   startFocus: (goal: string) => void
   stopFocus: () => void
   togglePet: () => void
+  setLanguage: (lang: Lang) => void
 }

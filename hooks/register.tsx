@@ -126,6 +126,7 @@ export const register: Register = (on, options) => {
     startFocus: goal => run('focus', a => a.startFocus(goal, opts.pomodoroMinutes))(),
     stopFocus: run('focus', a => a.stopFocus()),
     togglePet: run('pet', a => a.togglePet()),
+    setLanguage: lang => run('lang', a => a.setLanguage(lang))(),
   }
 
   // ------------------------------------------------------------ session
@@ -165,6 +166,13 @@ export const register: Register = (on, options) => {
         const box = await $.prompt.read()
         if (box.text.trim() === '') await $.prompt.fill({ text })
         else await $.prompt.fill({ text: `\n${text}`, mode: 'append' })
+      },
+      saveLanguage: async lang => {
+        try {
+          return (await $.config.set({ key: 'tabby.language', value: lang })).deny === undefined
+        } catch {
+          return false
+        }
       },
       isWindows: () => isWindows,
       play: async asset => {

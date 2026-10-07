@@ -19,7 +19,8 @@ import type { Host } from './host'
 import { duration, limitLabel } from './lib/format'
 import { burn, addSample } from './lib/forecast'
 import { parseLog, parseStatus, repoName } from './lib/git'
-import { L } from './lib/i18n'
+import { L, setLang } from './lib/i18n'
+import type { Lang } from './lib/i18n'
 import { achievement, level, NEW_PET, XP } from './lib/pet'
 import { addToDay, dayKey, streak } from './lib/stats'
 import { detectCommand, parseFailures, parseSummary, tail } from './lib/tests'
@@ -770,6 +771,15 @@ export function createActions(h: Host, opts: Options) {
     return p.isPetShown
   }
 
+  /** Speaks `lang` at once, and keeps it in /config for the next sessions. */
+  async function setLanguage(lang: Lang): Promise<void> {
+    setLang(lang)
+    // the words are not state: a new tick draws everything again
+    const now = await h.now()
+    await h.state.tick.set(() => now)
+    if (!(await h.saveLanguage(lang))) h.toast(L.cmd.langUnsaved)
+  }
+
   async function openPane(tab?: TabId): Promise<boolean> {
     if (tab !== undefined) await setTab(tab)
     // opening the pane is the intro done
@@ -819,6 +829,7 @@ export function createActions(h: Host, opts: Options) {
     setTab,
     toggleCompact,
     togglePet,
+    setLanguage,
     openPane,
   }
 }

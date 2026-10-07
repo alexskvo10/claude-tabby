@@ -225,6 +225,7 @@ const RU = {
     compactOff: 'Плашка: полный режим (две строки).',
     petOn: 'Табби снова в плашке.',
     petOff: 'Табби спрятался из плашки.',
+    langUnsaved: 'Язык сменён до перезапуска: сохранить его в /config → tabby не вышло.',
     tabs: 'Вкладки: overview, git, tasks, tests, pet. Ещё: /tab compact, /tab hide-pet. Настройки: /config → tabby.',
     opened: 'Панель Tabby открыта: 1–5 — вкладки, Esc — обратно к вводу.',
     waits: 'Панель откроется, когда хватит ширины терминала.',
@@ -462,6 +463,7 @@ const EN: Strings = {
     compactOff: 'Band: full (two rows).',
     petOn: 'Tabby is back in the band.',
     petOff: 'Tabby hid from the band.',
+    langUnsaved: 'Language changed until restart: it could not be saved in /config → tabby.',
     tabs: 'Tabs: overview, git, tasks, tests, pet. Also: /tab compact, /tab hide-pet. Settings: /config → tabby.',
     opened: 'Tabby pane open: 1–5 switch tabs, Esc returns to the prompt.',
     waits: 'The pane opens once the terminal is wide enough.',
@@ -488,8 +490,16 @@ export type Lang = 'ru' | 'en'
 /** The words in use; swapped in place by `setLang`. */
 export const L: Strings = { ...RU }
 
+let current: Lang = 'ru'
+
 export function setLang(lang: Lang): void {
+  current = lang
   Object.assign(L, lang === 'en' ? EN : RU)
+}
+
+/** The language `setLang` last chose. */
+export function lang(): Lang {
+  return current
 }
 
 const DARK = {

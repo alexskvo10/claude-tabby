@@ -25,6 +25,7 @@ import type {
   TabTurns,
   TabUsage,
 } from '../types'
+import type { Lang } from './lib/i18n'
 
 export type Host = {
   now: () => Promise<number>
@@ -45,6 +46,8 @@ export type Host = {
   /** puts text in the prompt box: over an empty draft, else after it */
   fill: (text: string) => Promise<void>
   play: (asset: string) => Promise<void>
+  /** keeps `language` in the user's /config → tabby; false when refused */
+  saveLanguage: (lang: Lang) => Promise<boolean>
   /** the host is Windows: commands run through cmd.exe, not sh */
   isWindows: () => boolean
   state: Cells

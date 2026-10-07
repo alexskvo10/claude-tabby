@@ -10,8 +10,8 @@
 
 <p>
   <img alt="Плагин Claude Code" src="https://img.shields.io/badge/Claude_Code-plugin-D97757?style=flat-square">
-  <img alt="Версия 0.4.6" src="https://img.shields.io/badge/version-0.4.6-3B4252?style=flat-square">
-  <img alt="72 теста" src="https://img.shields.io/badge/tests-72_passing-7FD4C1?style=flat-square">
+  <img alt="Версия 0.4.7" src="https://img.shields.io/badge/version-0.4.7-3B4252?style=flat-square">
+  <img alt="74 теста" src="https://img.shields.io/badge/tests-74_passing-7FD4C1?style=flat-square">
   <img alt="Лицензия MIT" src="https://img.shields.io/badge/license-MIT-F4C7A1?style=flat-square">
 </p>
 
@@ -102,7 +102,7 @@
 
 | Настройка | По умолчанию | Что меняет |
 | --- | --- | --- |
-| Language | `en` | `en` или `ru` |
+| Language | `en` | `en` или `ru`; ещё **EN \| RU** внизу вкладки Tabby — работает и в десктопном приложении |
 | Animate Tabby | вкл. | Анимация пиксельного кота |
 | Palette | `dark` | Цвета для тёмного или светлого терминала |
 | Pomodoro minutes | 25 | Длина помодоро |
@@ -166,7 +166,7 @@ claude --plugin-dir ~/claude-tabby
 
 ```bash
 claude plugin validate .   # манифест и модуль хуков глазами движка
-claude plugin test .       # 72 теста: утилиты, плашка, панель, команды, настройки
+claude plugin test .       # 74 теста: утилиты, плашка, панель, команды, настройки
 tsc -p .                   # после первой загрузки движок кладёт типы в .claude-plugin/types/
 ```
 

@@ -563,6 +563,31 @@ describe('pane', () => {
     expect(await pane($, w, 'overview')).not.toMatch(/claude-tabby/)
   })
 
+  test('EN | RU at the foot of the Tabby tab switch the language at once', async ($, on) => {
+    const w = world(on)
+    // the choice is kept in /config → tabby for the next sessions
+    const saved: unknown[] = []
+    on('config.set', async ($, e) => {
+      saved.push([e.key, e.value])
+      return { value: e.value }
+    })
+    await boot($, w)
+    await command($, w, 'tab', 'pet')
+    const ui = await $.ui.mount({ surface: 'desktop', ...PANE(100) })
+    expect(lines((await ui.drawn()) as never).at(-1)).toMatch(/· EN \| RU$/)
+    await ui.press({ key: 'lang-en' })
+    await w.clock.settle()
+    const drawn = lines((await ui.drawn()) as never)
+    expect(drawn[0]).toMatch(/1: Overview\s+2: Git/)
+    expect(drawn.at(-3)).toMatch(/^p hides or shows Tabby in the band/)
+    await ui.press({ key: 'lang-ru' })
+    await w.clock.settle()
+    expect(lines((await ui.drawn()) as never)[0]).toMatch(/1: Обзор/)
+    await ui.unmount()
+    expect(saved).toEqual([['tabby.language', 'en'], ['tabby.language', 'ru']])
+    expect(w.toasts.join('\n')).not.toMatch(/until restart|до перезапуска/)
+  })
+
   test('the accent line sits under the open tab, as wide as the tab', async ($, on) => {
     const w = world(on)
     await boot($, w)
