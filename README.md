@@ -24,9 +24,17 @@ Context and rate limits with forecasts · git and PR checks · tests · focus ti
 > [!IMPORTANT]
 > Tabby is built on Claude Code **function hooks**, which are in early access. It needs a Claude Code build **2.1.289 or newer** with function hooks enabled. On other builds the plugin will not load.
 
-## Why
+## Why Tabby
 
 You shouldn't have to ask Claude Code how much room is left. Tabby keeps the numbers that matter in two quiet rows above the prompt: how full the context is, when your limits reset, whether the tests are green and what you set out to do. One look, then back to work.
+
+- **All in one place.** Context, limits, git and PR checks, tests, Claude's plan, a focus timer, your TODO list and a pet, in one band and one pane. No status-line script, usage monitor or pet plugin to juggle.
+- **Inside Claude Code, and alive.** Not a line of text: hover a block for its details, click it to open its tab, click a failing test to ask Claude to fix it.
+- **Claude reads your list too.** It sees your focus goal and open tasks, adds and ticks items through its own tool, and the prompt cache stays warm.
+- **It looks ahead.** How many turns the context has left at your pace, and whether a limit lasts until it resets.
+- **The same limits in every chat.** A chat hears of your limits only with its own replies; Tabby shares the freshest reading, so a quiet chat never shows stale numbers.
+- **Terminal and desktop app.** The same band and pane in both, with the cat in pixel art everywhere.
+- **Nothing leaves your machine.** No dependencies and no network calls of its own beyond `gh`; [here is everything it touches](#what-tabby-does-on-your-machine).
 
 ## A look around
 
