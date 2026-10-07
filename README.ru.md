@@ -10,7 +10,7 @@
 
 <p>
   <img alt="Плагин Claude Code" src="https://img.shields.io/badge/Claude_Code-plugin-D97757?style=flat-square">
-  <img alt="Версия 0.4.2" src="https://img.shields.io/badge/version-0.4.2-3B4252?style=flat-square">
+  <img alt="Версия 0.4.3" src="https://img.shields.io/badge/version-0.4.3-3B4252?style=flat-square">
   <img alt="72 теста" src="https://img.shields.io/badge/tests-72_passing-7FD4C1?style=flat-square">
   <img alt="Лицензия MIT" src="https://img.shields.io/badge/license-MIT-F4C7A1?style=flat-square">
 </p>
@@ -22,7 +22,7 @@
 </div>
 
 > [!IMPORTANT]
-> Tabby работает на **function hooks** Claude Code, а они пока в раннем доступе. Нужна сборка Claude Code **2.1.289 или новее** с включёнными function hooks. На других сборках плагин не загрузится.
+> Tabby работает на **function hooks** Claude Code, а они пока в раннем доступе. Подходит Claude Code **2.1.285 (stable) и новее**; **рекомендуется 2.1.289 и новее**. Более старые сборки не проверялись.
 
 ## Почему Tabby
 
@@ -156,7 +156,9 @@ claude --plugin-dir ~/claude-tabby
 { "env": { "CLAUDE_CODE_PLUGIN_DIRS": "/полный/путь/к/claude-tabby" } }
 ```
 
-Обновление: `git pull` в папке и перезапуск `claude`. Десктопное приложение закройте полностью (вместе со значком в трее), чтобы оно перечитало код.
+**Обновления.** Плагины из сторонних маркетплейсов Claude Code обновляет сам, только если один раз это включить: `/plugin` → **Marketplaces** → **tabby** → **Enable auto-update**. Тогда новые версии скачиваются в фоне и применяются при следующем запуске. Вручную: `claude plugin update tabby@tabby` и перезапуск.
+
+Если плагин установлен из папки — `git pull` в ней и перезапуск `claude`. Десктопное приложение закройте полностью (вместе со значком в трее), чтобы оно перечитало код.
 
 Для статуса PR и проверок нужен установленный и авторизованный [`gh`](https://cli.github.com). Без него вкладка Git работает, только без PR.
 

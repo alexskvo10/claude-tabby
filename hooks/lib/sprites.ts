@@ -105,28 +105,35 @@ const BODY = [
   '..DOOOOOO{n}OOOOOOD...',
   '...DOOOOO{m}OOOOOD....',
   '....DDOOOOOOODD.....',
-  '....DOOOOOOOOOD.{t1}',
-  '...DOOOOLLLOOOOD{t2}',
-  '...DOOOLLLLLOOOD{t3}',
+  '....DOOOOOOOOOD.....',
+  '...DOOOOLLLOOOOD....',
+  '...DOOOLLLLLOOOD....',
   '...DOOOLLLLLOOOOD...',
   '...DOOOOOOOOOOOD....',
   '....DDDODDDDODDD....',
 ]
 
-type Face = { e: string; f: string; n: string; m: string; tail: 0 | 1 }
+// The tail rises from the hip and swishes: upright, curled right, hooked low.
+// Rows 9-14, right of the hip; its root stays put so it swings, not jumps.
+const TAILS = {
+  up: { 9: '.................D', 10: '................DOD', 11: '................DOD', 12: '................DOD', 13: '.................OD', 14: '................DD' },
+  right: { 9: '..................DD', 10: '.................DOD', 11: '................DOD.', 12: '................DOD', 13: '.................OD', 14: '................DD' },
+  hook: { 10: '.................DDD', 11: '................DOOD', 12: '................DODD', 13: '.................OD', 14: '................DD' },
+} satisfies Record<string, Record<number, string>>
+
+type Face = { e: string; f: string; n: string; m: string; tail: keyof typeof TAILS }
 
 function big(face: Face, extra: Record<number, string> = {}): string[] {
-  const tail = face.tail === 0 ? ['.DD', 'DOD', 'OD.'] : ['DD.', 'DOD', '.DO']
+  const tail: Record<number, string> = TAILS[face.tail]
   return BODY.map((row, i) => {
-    const out = row
+    let out = row
       .replaceAll('{e}', face.e)
       .replaceAll('{f}', face.f)
       .replace('{n}', face.n)
       .replace('{m}', face.m)
-      .replace('{t1}', tail[0]!)
-      .replace('{t2}', tail[1]!)
-      .replace('{t3}', tail[2]!)
-    return extra[i] !== undefined ? merge(out.padEnd(20, '.'), extra[i]!) : out.padEnd(20, '.')
+      .padEnd(20, '.')
+    if (tail[i] !== undefined) out = merge(out, tail[i]!)
+    return extra[i] !== undefined ? merge(out, extra[i]!) : out
   })
 }
 
@@ -143,27 +150,29 @@ const LAPTOP_BIG: Record<number, string> = {
 const SHUT = { e: 'OO', f: 'DD' }
 
 const BIG_FRAMES: Record<Mood, readonly (readonly string[])[]> = {
+  // the tail swishes up, right, hooked, right; the last frame is the blink
   happy: [
-    big({ ...OPEN, n: 'P', m: 'D', tail: 0 }),
-    big({ ...OPEN, n: 'P', m: 'D', tail: 1 }),
-    big({ ...OPEN, n: 'P', m: 'D', tail: 0 }),
-    big({ ...SHUT, n: 'P', m: 'D', tail: 1 }),
+    big({ ...OPEN, n: 'P', m: 'D', tail: 'up' }),
+    big({ ...OPEN, n: 'P', m: 'D', tail: 'right' }),
+    big({ ...OPEN, n: 'P', m: 'D', tail: 'hook' }),
+    big({ ...OPEN, n: 'P', m: 'D', tail: 'right' }),
+    big({ ...SHUT, n: 'P', m: 'D', tail: 'up' }),
   ],
   // over the lid of an open laptop: one paw rests on its edge, the other taps
   work: [
-    big({ e: 'OK', f: 'KW', n: 'P', m: 'D', tail: 0 }, { ...LAPTOP_BIG, 10: '..NNLLNNNNNNLLNN....' }),
-    big({ e: 'KO', f: 'WK', n: 'P', m: 'D', tail: 1 }, { ...LAPTOP_BIG, 9: '....LL..............', 10: '..NNNNNNNNNNLLNN....' }),
+    big({ e: 'OK', f: 'KW', n: 'P', m: 'D', tail: 'up' }, { ...LAPTOP_BIG, 10: '..NNLLNNNNNNLLNN....' }),
+    big({ e: 'KO', f: 'WK', n: 'P', m: 'D', tail: 'right' }, { ...LAPTOP_BIG, 9: '....LL..............', 10: '..NNNNNNNNNNLLNN....' }),
   ],
-  sad: [big({ ...OPEN, n: 'P', m: 'D', tail: 0 }, { 7: '....T' }), big({ ...OPEN, n: 'P', m: 'D', tail: 0 }, { 8: '....T' })],
+  sad: [big({ ...OPEN, n: 'P', m: 'D', tail: 'up' }, { 7: '....T' }), big({ ...OPEN, n: 'P', m: 'D', tail: 'up' }, { 8: '....T' })],
   sleep: [
-    big({ ...SHUT, n: 'P', m: 'D', tail: 0 }, { 0: '.................Z..' }),
-    big({ ...SHUT, n: 'P', m: 'D', tail: 0 }, { 0: '..................Z.', 1: '................Z...' }),
+    big({ ...SHUT, n: 'P', m: 'D', tail: 'up' }, { 0: '.................Z..' }),
+    big({ ...SHUT, n: 'P', m: 'D', tail: 'up' }, { 0: '..................Z.', 1: '................Z...' }),
   ],
   proud: [
-    big({ ...OPEN, n: 'P', m: 'P', tail: 1 }, { 0: 'Y.................Y.', 4: '..................Y.' }),
-    big({ ...OPEN, n: 'P', m: 'P', tail: 0 }, { 1: '.Y.................Y', 5: 'Y...................' }),
+    big({ ...OPEN, n: 'P', m: 'P', tail: 'right' }, { 0: 'Y.................Y.', 4: '..................Y.' }),
+    big({ ...OPEN, n: 'P', m: 'P', tail: 'up' }, { 1: '.Y.................Y', 5: 'Y...................' }),
   ],
-  focus: [big({ e: 'KK', f: 'KK', n: 'P', m: 'D', tail: 0 })],
+  focus: [big({ e: 'KK', f: 'KK', n: 'P', m: 'D', tail: 'up' })],
 }
 
 function pick<T>(frames: readonly T[], frame: number): T {

@@ -341,8 +341,9 @@ describe('pixels', () => {
   test('Tabby blinks now and then and types while working', () => {
     expect(frameAt('happy', 100, 'small')).toBe(1)
     expect(frameAt('happy', 1000, 'small')).toBe(0)
-    expect(frameAt('happy', 100, 'big')).toBe(3)
-    expect(frameAt('happy', 1000, 'big')).toBe(1)
+    expect(frameAt('happy', 100, 'big')).toBe(4)
+    // the tail swishes through up, right, hooked, right
+    expect([200, 400, 800, 1100].map(ms => frameAt('happy', ms, 'big'))).toEqual([0, 1, 2, 3])
     expect(new Set([0, 280, 560, 840].map(ms => frameAt('work', ms, 'small'))).size).toBe(4)
     expect(frameAt('focus', 12345, 'big')).toBe(0)
   })

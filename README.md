@@ -10,7 +10,7 @@ Context and rate limits with forecasts · git and PR checks · tests · focus ti
 
 <p>
   <img alt="Claude Code plugin" src="https://img.shields.io/badge/Claude_Code-plugin-D97757?style=flat-square">
-  <img alt="Version 0.4.2" src="https://img.shields.io/badge/version-0.4.2-3B4252?style=flat-square">
+  <img alt="Version 0.4.3" src="https://img.shields.io/badge/version-0.4.3-3B4252?style=flat-square">
   <img alt="72 tests" src="https://img.shields.io/badge/tests-72_passing-7FD4C1?style=flat-square">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-F4C7A1?style=flat-square">
 </p>
@@ -22,7 +22,7 @@ Context and rate limits with forecasts · git and PR checks · tests · focus ti
 </div>
 
 > [!IMPORTANT]
-> Tabby is built on Claude Code **function hooks**, which are in early access. It needs a Claude Code build **2.1.289 or newer** with function hooks enabled. On other builds the plugin will not load.
+> Tabby is built on Claude Code **function hooks**, which are in early access. It runs on Claude Code **2.1.285 (stable) or newer**; **2.1.289 or newer is recommended**. Older builds are untested.
 
 ## Why Tabby
 
@@ -156,7 +156,9 @@ To load it every time, add this to `~/.claude/settings.json`:
 { "env": { "CLAUDE_CODE_PLUGIN_DIRS": "/full/path/to/claude-tabby" } }
 ```
 
-Update with `git pull` in the folder, then restart `claude`. In the desktop app, quit it fully (tray icon included) so it reads the new code.
+**Updates.** Claude Code updates plugins from third-party marketplaces only when you turn it on, once: `/plugin` → **Marketplaces** → **tabby** → **Enable auto-update**. It then fetches new versions in the background and applies them on the next start. To update by hand: `claude plugin update tabby@tabby`, then restart.
+
+Installed from a folder, update with `git pull` there and restart `claude`. In the desktop app, quit it fully (tray icon included) so it reads the new code.
 
 PR status and checks need the [`gh`](https://cli.github.com) CLI, installed and signed in. Without it the Git tab still works, just without the PR.
 

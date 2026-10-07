@@ -11,9 +11,10 @@ export function frameAt(mood: Mood, ms: number, size: 'small' | 'big'): number {
     return ms % 4200 < 700 ? 1 : 0
   }
   if (mood === 'happy') {
-    // a blink of 160 ms every 4.2 s; between blinks the big cat wags its tail
+    // a blink of 160 ms every 4.2 s; between blinks the big cat swishes its
+    // tail through its four frames, three sweeps a loop
     if (ms % 4200 < 160) return n - 1
-    return Math.floor(ms / 650) % 2
+    return Math.floor(ms / 350) % (n - 1)
   }
   if (mood === 'work') return Math.floor(ms / 280) % n
   if (mood === 'sleep') return Math.floor(ms / 900) % n
